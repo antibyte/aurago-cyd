@@ -212,6 +212,7 @@ void setup() {
   if (!wifi_ok) {
     ui_splash("Wi-Fi failed", "reboot or hold BOOT");
   } else {
+    provision_enter_token(&cfg);
     char line[40];
     snprintf(line, sizeof(line), "%s", WiFi.localIP().toString().c_str());
     ui_splash(cfg.demo ? "demo mode" : cfg.host, line);

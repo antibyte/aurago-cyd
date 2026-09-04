@@ -1,9 +1,10 @@
 #include "config_store.h"
 
 #include <Preferences.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include <stdlib.h>
 
 static Preferences prefs;
 
@@ -67,6 +68,73 @@ void config_clear() {
     prefs.clear();
     prefs.end();
   }
+}
+
+static const char kTokenAlphabet[] = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+void config_normalize_token(char *dst, size_t cap, const char *src) {
+  if (dst == nullptr || cap == 0) {
+    return;
+  }
+  dst[0] = '\0';
+  if (src == nullptr) {
+    return;
+  }
+  char compact[80];
+  size_t n = 0;
+  for (const char *p = src; *p != '\0' && n + 1 < sizeof(compact); p++) {
+    if (*p == ' ' || *p == '-' || *p == '\t' || *p == '\n') {
+      continue;
+    }
+    compact[n++] = *p;
+  }
+  compact[n] = '\0';
+  if (n == 0) {
+    return;
+  }
+  const char *body = compact;
+  if (n >= 5 && strncasecmp(compact, "aura_", 5) == 0) {
+    body = compact + 5;
+  }
+  size_t body_len = strlen(body);
+  if (body_len == 9) {
+    if (cap < 15) {
+      return;
+    }
+    memcpy(dst, "aura_", 5);
+    for (size_t i = 0; i < 9; i++) {
+      char c = body[i];
+      if (c >= 'a' && c <= 'z') {
+        c = static_cast<char>(c - 32);
+      }
+      dst[5 + i] = c;
+    }
+    dst[14] = '\0';
+    return;
+  }
+  snprintf(dst, cap, "aura_%s", body);
+}
+
+bool config_token_ready(const char *token) {
+  char norm[80];
+  config_normalize_token(norm, sizeof(norm), token ? token : "");
+  if (strncmp(norm, "aura_", 5) != 0) {
+    return false;
+  }
+  const char *body = norm + 5;
+  size_t n = strlen(body);
+  if (n == 32) {
+    return true;
+  }
+  if (n != 9) {
+    return false;
+  }
+  for (size_t i = 0; i < 9; i++) {
+    if (strchr(kTokenAlphabet, body[i]) == nullptr) {
+      return false;
+    }
+  }
+  return true;
 }
 
 bool config_is_demo(const DeviceConfig *cfg) {

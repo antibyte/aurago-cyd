@@ -52,10 +52,12 @@ If upload fails, keep `upload_speed = 115200` (already set) and hold **BOOT** wh
 2. Join it and set:
    - Wi-Fi SSID / password
    - **AuraGo URL** — `http://192.168.x.x:8088` or `demo`
-   - **Device token** — AuraGo token with scope `cyd` (`aura_…`)
-3. After connect, page 1 is status, page 2 is CPU/RAM/disk. Swipe to switch.
-4. Tap an overlay to dismiss it. RGB LED: green idle, yellow busy, red error/critical, blue connecting.
-5. Hold **BOOT** for 5 seconds at power-on to wipe config and reopen the portal.
+3. On the glass, type the 9-character display code from AuraGo Config
+   (**Cheap Yellow Display**). It is shown as `XXX XXX XXX`. `aura_` is
+   already filled in; do not type the prefix.
+4. After connect, page 1 is status, page 2 is CPU/RAM/disk. Swipe to switch.
+5. Tap an overlay to dismiss it. RGB LED: green idle, yellow busy, red error/critical, blue connecting.
+6. Hold **BOOT** for 5 seconds at power-on to wipe config and reopen the portal.
 
 `demo` as the URL runs an offline animated dashboard (no AuraGo required).
 

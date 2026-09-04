@@ -192,6 +192,77 @@ void ui_pairing(const char *ssid, const char *qr_text, const char *portal_ip) {
   tft.drawString((portal_ip && portal_ip[0]) ? portal_ip : "192.168.4.1", tx, 182, 2);
 }
 
+static const char kTokenKeys[] = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+static const int kKeyY = 100;
+static const int kKeyW = 40;
+static const int kKeyH = 26;
+static const int kActionY = 206;
+
+void ui_token_entry(const char *prefix, const char *body) {
+  tft.fillScreen(COL_BG);
+  draw_header("pair", false, 0);
+  tft.setTextColor(COL_MUTED, COL_BG);
+  tft.drawString("type 9 characters", 12, 34, 2);
+  tft.setTextColor(COL_ACCENT, COL_BG);
+  tft.drawString(prefix && prefix[0] ? prefix : "aura_", 12, 62, 2);
+
+  const char *code = body ? body : "";
+  size_t n = strlen(code);
+  for (int g = 0; g < 3; g++) {
+    int x = 90 + g * 74;
+    uint16_t bg = COL_PANEL;
+    if (n / 3 == static_cast<size_t>(g) && n < 9) {
+      bg = COL_LINE;
+    }
+    tft.fillRoundRect(x, 52, 68, 36, 4, bg);
+    char grp[4] = {' ', ' ', ' ', 0};
+    for (int i = 0; i < 3; i++) {
+      size_t idx = static_cast<size_t>(g * 3 + i);
+      if (idx < n) {
+        grp[i] = code[idx];
+      }
+    }
+    tft.setTextColor(COL_TEXT, bg);
+    tft.drawCentreString(grp, x + 34, 58, 4);
+  }
+
+  for (int i = 0; i < 32; i++) {
+    int col = i % 8;
+    int row = i / 8;
+    int x = col * kKeyW;
+    int y = kKeyY + row * kKeyH;
+    tft.fillRect(x + 1, y + 1, kKeyW - 2, kKeyH - 2, COL_PANEL);
+    char lab[2] = {kTokenKeys[i], 0};
+    tft.setTextColor(COL_TEXT, COL_PANEL);
+    tft.drawCentreString(lab, x + kKeyW / 2, y + 5, 2);
+  }
+
+  tft.fillRoundRect(8, kActionY, 140, 28, 4, COL_PANEL);
+  tft.setTextColor(COL_MUTED, COL_PANEL);
+  tft.drawCentreString("DEL", 78, kActionY + 6, 2);
+
+  uint16_t okBg = n == 9 ? COL_ACCENT : COL_PANEL;
+  uint16_t okFg = n == 9 ? COL_BG : COL_MUTED;
+  tft.fillRoundRect(172, kActionY, 140, 28, 4, okBg);
+  tft.setTextColor(okFg, okBg);
+  tft.drawCentreString("OK", 242, kActionY + 6, 2);
+}
+
+char ui_token_key_at(int16_t x, int16_t y) {
+  if (y >= kActionY) {
+    return x < 160 ? '\b' : '\n';
+  }
+  if (y < kKeyY) {
+    return 0;
+  }
+  int row = (y - kKeyY) / kKeyH;
+  int col = x / kKeyW;
+  if (row < 0 || row > 3 || col < 0 || col > 7) {
+    return 0;
+  }
+  return kTokenKeys[row * 8 + col];
+}
+
 void ui_offline(const NetStatus *st, uint32_t last_ok_ms) {
   tft.fillScreen(COL_BG);
   draw_header("offline", false, 0);

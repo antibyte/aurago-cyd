@@ -1,5 +1,6 @@
 #include "provision.h"
 #include "protocol.h"
+#include "hardware.h"
 #include "ui.h"
 
 #include <WiFi.h>
@@ -27,13 +28,10 @@ bool provision_connect(DeviceConfig *cfg, bool force_portal) {
   wm.setMinimumSignalQuality(8);
 
   WiFiManagerParameter p_url("url", "AuraGo URL (or demo)", cfg->aurago_url, 127);
-  WiFiManagerParameter p_token("token", "Device token (aura_...)", cfg->token, 79);
   wm.addParameter(&p_url);
-  wm.addParameter(&p_token);
 
   wm.setSaveParamsCallback([&]() {
     copy_trunc(cfg->aurago_url, sizeof(cfg->aurago_url), p_url.getValue());
-    copy_trunc(cfg->token, sizeof(cfg->token), p_token.getValue());
     config_parse_url(cfg);
     cfg->demo = config_is_demo(cfg);
     config_save(cfg);
@@ -52,7 +50,6 @@ bool provision_connect(DeviceConfig *cfg, bool force_portal) {
   }
 
   copy_trunc(cfg->aurago_url, sizeof(cfg->aurago_url), p_url.getValue());
-  copy_trunc(cfg->token, sizeof(cfg->token), p_token.getValue());
   if (cfg->aurago_url[0] == '\0') {
     copy_trunc(cfg->aurago_url, sizeof(cfg->aurago_url), "demo");
   }
@@ -66,4 +63,45 @@ bool provision_connect(DeviceConfig *cfg, bool force_portal) {
     tzset();
   }
   return ok && WiFi.status() == WL_CONNECTED;
+}
+
+bool provision_enter_token(DeviceConfig *cfg) {
+  if (cfg == nullptr) {
+    return false;
+  }
+  if (config_is_demo(cfg) || config_token_ready(cfg->token)) {
+    return true;
+  }
+
+  char body[10];
+  memset(body, 0, sizeof(body));
+  int n = 0;
+  ui_token_entry("aura_", body);
+
+  for (;;) {
+    TouchEvent ev = hardware_poll_touch();
+    if (ev.tap) {
+      char key = ui_token_key_at(ev.x, ev.y);
+      if (key == '\b') {
+        if (n > 0) {
+          body[--n] = '\0';
+        }
+      } else if (key == '\n') {
+        if (n == 9) {
+          break;
+        }
+      } else if (key != 0 && n < 9) {
+        body[n++] = key;
+        body[n] = '\0';
+      }
+      ui_token_entry("aura_", body);
+    }
+    delay(20);
+  }
+
+  char raw[20];
+  snprintf(raw, sizeof(raw), "aura_%s", body);
+  config_normalize_token(cfg->token, sizeof(cfg->token), raw);
+  config_save(cfg);
+  return config_token_ready(cfg->token);
 }
