@@ -46,7 +46,9 @@ If upload fails, keep `upload_speed = 115200` (already set) and hold **BOOT** wh
 
 ## First boot
 
-1. The display opens a captive portal AP named `agocyd-XXXX`.
+1. The display opens a captive portal AP named `agocyd-XXXX` and shows a
+   Wi-Fi QR code. Scan it to join (open network, no password). Then open
+   `192.168.4.1` if the portal does not appear by itself.
 2. Join it and set:
    - Wi-Fi SSID / password
    - **AuraGo URL** — `http://192.168.x.x:8088` or `demo`

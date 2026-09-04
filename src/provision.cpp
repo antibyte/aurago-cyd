@@ -1,11 +1,21 @@
 #include "provision.h"
 #include "protocol.h"
+#include "ui.h"
 
 #include <WiFi.h>
 #include <WiFiManager.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+
+static char g_ap_ssid[20];
+
+static void show_pairing_qr(WiFiManager *wm) {
+  (void)wm;
+  char qr[48];
+  snprintf(qr, sizeof(qr), "WIFI:T:nopass;S:%s;;", g_ap_ssid);
+  ui_pairing(g_ap_ssid, qr, WiFi.softAPIP().toString().c_str());
+}
 
 bool provision_connect(DeviceConfig *cfg, bool force_portal) {
   WiFi.mode(WIFI_STA);
@@ -31,14 +41,14 @@ bool provision_connect(DeviceConfig *cfg, bool force_portal) {
 
   uint8_t mac[6];
   WiFi.macAddress(mac);
-  char ap[20];
-  snprintf(ap, sizeof(ap), "agocyd-%02X%02X", mac[4], mac[5]);
+  snprintf(g_ap_ssid, sizeof(g_ap_ssid), "agocyd-%02X%02X", mac[4], mac[5]);
+  wm.setAPCallback(show_pairing_qr);
 
   bool ok;
   if (force_portal) {
-    ok = wm.startConfigPortal(ap);
+    ok = wm.startConfigPortal(g_ap_ssid);
   } else {
-    ok = wm.autoConnect(ap);
+    ok = wm.autoConnect(g_ap_ssid);
   }
 
   copy_trunc(cfg->aurago_url, sizeof(cfg->aurago_url), p_url.getValue());

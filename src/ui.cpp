@@ -2,6 +2,7 @@
 #include "hardware.h"
 
 #include <Arduino.h>
+#include <qrcode.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -148,6 +149,47 @@ void ui_splash(const char *line1, const char *line2) {
     tft.setTextColor(COL_MUTED, COL_BG);
     tft.drawCentreString(line2, SCREEN_W / 2, 150, 2);
   }
+}
+
+void ui_pairing(const char *ssid, const char *qr_text, const char *portal_ip) {
+  tft.fillScreen(COL_BG);
+  draw_header("pair", false, 0);
+
+  const char *payload = (qr_text && qr_text[0]) ? qr_text : "";
+  QRCode qrcode;
+  uint8_t qrcodeData[qrcode_getBufferSize(3)];
+  bool ok = payload[0] != '\0' && qrcode_initText(&qrcode, qrcodeData, 3, ECC_MEDIUM, payload) == 0;
+
+  const int quiet = 3;
+  const int scale = 5;
+  int box_x = 10;
+  int box_y = 38;
+  int qr_px = 0;
+  if (ok) {
+    qr_px = (qrcode.size + quiet * 2) * scale;
+    tft.fillRoundRect(box_x, box_y, qr_px, qr_px, 4, 0xFFFF);
+    int ox = box_x + quiet * scale;
+    int oy = box_y + quiet * scale;
+    for (uint8_t y = 0; y < qrcode.size; y++) {
+      for (uint8_t x = 0; x < qrcode.size; x++) {
+        if (qrcode_getModule(&qrcode, x, y)) {
+          tft.fillRect(ox + x * scale, oy + y * scale, scale, scale, TFT_BLACK);
+        }
+      }
+    }
+  }
+
+  int tx = ok ? box_x + qr_px + 10 : 16;
+  tft.setTextColor(COL_MUTED, COL_BG);
+  tft.drawString("Scan to join", tx, 48, 2);
+  tft.setTextColor(COL_ACCENT, COL_BG);
+  tft.drawString(ssid && ssid[0] ? ssid : "agocyd-XXXX", tx, 74, 2);
+  tft.setTextColor(COL_MUTED, COL_BG);
+  tft.drawString("open Wi-Fi", tx, 108, 2);
+  tft.drawString("no password", tx, 128, 2);
+  tft.drawString("then open", tx, 160, 2);
+  tft.setTextColor(COL_TEXT, COL_BG);
+  tft.drawString((portal_ip && portal_ip[0]) ? portal_ip : "192.168.4.1", tx, 182, 2);
 }
 
 void ui_offline(const NetStatus *st, uint32_t last_ok_ms) {
