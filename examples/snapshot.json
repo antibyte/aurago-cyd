@@ -1,0 +1,28 @@
+{
+  "ts": 1777650000,
+  "agent": {
+    "busy": false,
+    "model": "grok-4",
+    "personality": "default",
+    "task": ""
+  },
+  "host": {
+    "cpu_pct": 42.1,
+    "mem_pct": 61.0,
+    "disk_pct": 28.4,
+    "uptime_s": 372012,
+    "host_uptime_s": 1200000
+  },
+  "work": {
+    "missions_running": 0,
+    "missions_queued": 2,
+    "notes_open": 3,
+    "last_user_h": 0.2
+  },
+  "display": {
+    "page": "status",
+    "brightness": 180,
+    "led": "green"
+  },
+  "notify": null
+}
