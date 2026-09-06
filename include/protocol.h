@@ -80,6 +80,7 @@ struct WsEvent {
 
 void snapshot_clear(Snapshot *s);
 bool snapshot_parse(const char *json, size_t len, Snapshot *out);
+const char *snapshot_parse_error();
 bool ws_event_parse(const char *json, size_t len, WsEvent *out);
 int notify_rank(const char *priority);
 uint16_t notify_ttl(const NotifyInfo *n);

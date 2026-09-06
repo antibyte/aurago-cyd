@@ -7,14 +7,16 @@ and agent-pushed notification overlays.
 
 ```
 ┌────────────────────────────────┐
-│ AURAGO   status   21:04   ▮▮▮▮ │
-│ idle              grok-4       │
-│ NOW  waiting                   │
-│ LAST 12m ago                   │
-│ missions 0 run / 2 queued      │
-│ notes 3 open              1/2  │
+│ AURAGO  HOME   21:04  CFG  ▮▮▮ │
+│  IDLE              grok-4      │
+│  NOW  waiting                  │
+│  LAST 12m     MISSIONS 0 run   │
+│  CPU  ▁▂▃▅▄▆▅▃   42%           │
+│           ● ○ ○ ○              │
 └────────────────────────────────┘
 ```
+
+Four swipe pages: **HOME** (hero idle/busy + sparkline), **LOAD** (CPU/RAM/disk arc gauges), **WORK** (missions + notes), **HOST** (uptime, RSSI, IP). Tap the footer dots or `<` `>`. Orbitron + 7-segment digit fonts. Dark mode is the default.
 
 ## Hardware
 
@@ -46,18 +48,21 @@ If upload fails, keep `upload_speed = 115200` (already set) and hold **BOOT** wh
 
 ## First boot
 
-1. The display opens a captive portal AP named `agocyd-XXXX` and shows a
-   Wi-Fi QR code. Scan it to join (open network, no password). Then open
-   `192.168.4.1` if the portal does not appear by itself.
-2. Join it and set:
-   - Wi-Fi SSID / password
-   - **AuraGo URL** — `http://192.168.x.x:8088` or `demo`
-3. On the glass, type the 9-character display code from AuraGo Config
-   (**Cheap Yellow Display**). It is shown as `XXX XXX XXX`. `aura_` is
-   already filled in; do not type the prefix.
-4. After connect, page 1 is status, page 2 is CPU/RAM/disk. Swipe to switch.
-5. Tap an overlay to dismiss it. RGB LED: green idle, yellow busy, red error/critical, blue connecting.
-6. Hold **BOOT** for 5 seconds at power-on to wipe config and reopen the portal.
+1. Prefer the **Web flasher** on AuraGo Config → Cheap Yellow Display (Chrome or
+   Edge, HTTPS or localhost). It programs the board over USB and writes the
+   display token plus Display URL, so the glass only needs Wi-Fi.
+2. If you flashed with PlatformIO instead, the display opens a captive portal AP
+   named `agocyd-XXXX` and shows a Wi-Fi QR code. Scan it to join (open network,
+   no password). Then open `192.168.4.1` if the portal does not appear by itself.
+3. On the portal set Wi-Fi SSID / password. After a web-flasher install the
+   AuraGo URL and token are already present. Otherwise enter the **Display URL**
+   from AuraGo (`https://<lan-ip>:8443` if HTTPS is on) and type the 9-character
+   code (`XXX XXX XXX`) on the glass. `aura_` is prefilled. If the host is wrong,
+   tap **Edit** on the connecting/offline screen.
+4. After connect, swipe (or tap the footer dots) across HOME, LOAD, WORK, and HOST.
+6. Tap **CFG** in the header for setup (HTTPS, port, dark mode). Dark mode is the default.
+7. Tap an overlay to dismiss it. RGB LED: green idle, yellow busy, red error/critical, blue connecting.
+8. Hold **BOOT** for 5 seconds at power-on to wipe config and reopen the portal.
 
 `demo` as the URL runs an offline animated dashboard (no AuraGo required).
 

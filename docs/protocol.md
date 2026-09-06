@@ -58,7 +58,7 @@ Payloads stay at or under ~1.5 KB. Unknown JSON fields are ignored.
 String limits (firmware truncates): `title` 32, `body` 96, `task` 40, `model` 23.
 
 `priority`: `low` | `normal` | `high` | `critical`.  
-`display.page`: `status` | `load`.  
+`display.page`: `status` | `home` | `load` | `work` | `host`.  
 `display.led`: `off` | `green` | `yellow` | `red` | `blue`.  
 `display.brightness`: 0–255.
 
@@ -73,7 +73,7 @@ Server → device:
 { "type": "notify", "id": "ntf_01HEXAMPLE", "title": "Backup failed", "body": "…", "priority": "critical", "ttl_s": 60 }
 { "type": "clear", "id": "ntf_01HEXAMPLE" }
 { "type": "led", "color": "yellow" }
-{ "type": "page", "page": "load" }
+{ "type": "page", "page": "load" }   // status | home | load | work | host
 { "type": "ping" }
 ```
 
@@ -110,3 +110,21 @@ Critical never yields to normal. TTL default 30 s, critical 60 s, max 300 s.
 
 LAN only in v1. HTTPS is optional; firmware may skip TLS verification when
 the provisioned URL starts with `https://` (documented as insecure).
+
+## Factory provision (web flasher)
+
+AuraGo can flash firmware from the browser and write token + Display URL into a
+4 KB `cydcfg` data partition at `0x1F0000` (subtype `0x40`). Layout:
+
+| Offset | Size | Field |
+|---|---|---|
+| 0 | 4 | magic `AGCY` |
+| 4 | 1 | version `1` |
+| 5 | 1 | reserved |
+| 6 | 2 | payload length, little-endian |
+| 8 | n | UTF-8 JSON `{"url":"https://host:8443","token":"aura_…"}` |
+
+On first boot, if NVS has no token (or still `demo`), firmware copies this blob
+into Preferences and skips the on-glass token keypad. Wi-Fi still uses the
+captive portal.
+

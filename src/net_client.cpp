@@ -100,10 +100,13 @@ static int http_do(const char *method, const char *suffix, const char *body, cha
     code = http.GET();
   }
   if (code > 0 && resp != nullptr && resp_cap > 0) {
-    WiFiClient *stream = http.getStreamPtr();
-    int n = 0;
-    if (stream != nullptr) {
-      n = stream->readBytes(resp, resp_cap - 1);
+    String payload = http.getString();
+    size_t n = payload.length();
+    if (n >= resp_cap) {
+      n = resp_cap - 1;
+    }
+    if (n > 0) {
+      memcpy(resp, payload.c_str(), n);
     }
     resp[n] = '\0';
   }
@@ -166,10 +169,19 @@ void net_begin(const DeviceConfig *in) {
   event_head = 0;
   event_count = 0;
   backoff_ms = 1000;
+  next_retry_ms = 0;
   status.wifi = WiFi.status() == WL_CONNECTED;
   if (!cfg.demo && cfg.url_ok) {
     ws_start();
   }
+}
+
+void net_reconfigure(const DeviceConfig *in) {
+  if (ws_started) {
+    ws.disconnect();
+    ws_started = false;
+  }
+  net_begin(in);
 }
 
 void net_loop() {
@@ -206,7 +218,11 @@ bool net_fetch_snapshot(Snapshot *out) {
     return false;
   }
   if (!snapshot_parse(http_buf, strlen(http_buf), out)) {
-    set_error("bad snapshot json");
+    const char *why = snapshot_parse_error();
+    char err[64];
+    snprintf(err, sizeof(err), "json %s", why && why[0] ? why : "parse");
+    set_error(err);
+    Serial.printf("snapshot parse failed (%s): %.80s\n", err, http_buf);
     return false;
   }
   status.online = true;

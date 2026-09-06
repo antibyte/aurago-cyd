@@ -12,6 +12,7 @@ struct NetStatus {
 };
 
 void net_begin(const DeviceConfig *cfg);
+void net_reconfigure(const DeviceConfig *cfg);
 void net_loop();
 bool net_fetch_snapshot(Snapshot *out);
 bool net_send_heartbeat(int8_t rssi);

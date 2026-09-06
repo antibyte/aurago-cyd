@@ -27,7 +27,7 @@ bool provision_connect(DeviceConfig *cfg, bool force_portal) {
   wm.setConnectTimeout(30);
   wm.setMinimumSignalQuality(8);
 
-  WiFiManagerParameter p_url("url", "AuraGo URL (or demo)", cfg->aurago_url, 127);
+  WiFiManagerParameter p_url("url", "AuraGo URL https://ip:8443", cfg->aurago_url, 127);
   wm.addParameter(&p_url);
 
   wm.setSaveParamsCallback([&]() {
@@ -65,11 +65,11 @@ bool provision_connect(DeviceConfig *cfg, bool force_portal) {
   return ok && WiFi.status() == WL_CONNECTED;
 }
 
-bool provision_enter_token(DeviceConfig *cfg) {
+bool provision_enter_token(DeviceConfig *cfg, bool force) {
   if (cfg == nullptr) {
     return false;
   }
-  if (config_is_demo(cfg) || config_token_ready(cfg->token)) {
+  if (config_is_demo(cfg) || (!force && config_token_ready(cfg->token))) {
     return true;
   }
 
@@ -104,4 +104,35 @@ bool provision_enter_token(DeviceConfig *cfg) {
   config_normalize_token(cfg->token, sizeof(cfg->token), raw);
   config_save(cfg);
   return config_token_ready(cfg->token);
+}
+
+bool provision_edit_url(DeviceConfig *cfg) {
+  if (cfg == nullptr) {
+    return false;
+  }
+  uint8_t mac[6];
+  WiFi.macAddress(mac);
+  snprintf(g_ap_ssid, sizeof(g_ap_ssid), "agocyd-%02X%02X", mac[4], mac[5]);
+
+  WiFiManager wm;
+  wm.setDebugOutput(false);
+  wm.setConfigPortalTimeout(180);
+  WiFiManagerParameter p_url("url", "AuraGo URL https://ip:8443", cfg->aurago_url, 127);
+  wm.addParameter(&p_url);
+  wm.setAPCallback(show_pairing_qr);
+  wm.setSaveParamsCallback([&]() {
+    copy_trunc(cfg->aurago_url, sizeof(cfg->aurago_url), p_url.getValue());
+    config_parse_url(cfg);
+    cfg->demo = config_is_demo(cfg);
+    config_save(cfg);
+  });
+  bool ok = wm.startConfigPortal(g_ap_ssid);
+  copy_trunc(cfg->aurago_url, sizeof(cfg->aurago_url), p_url.getValue());
+  if (cfg->aurago_url[0] == '\0') {
+    copy_trunc(cfg->aurago_url, sizeof(cfg->aurago_url), "demo");
+  }
+  config_parse_url(cfg);
+  cfg->demo = config_is_demo(cfg);
+  config_save(cfg);
+  return ok && WiFi.status() == WL_CONNECTED;
 }

@@ -32,15 +32,16 @@ void snapshot_clear(Snapshot *s) {
 
 static void parse_notify(JsonVariantConst n, NotifyInfo *out) {
   memset(out, 0, sizeof(*out));
-  if (n.isNull() || !n.is<JsonObject>()) {
+  JsonObjectConst obj = n.as<JsonObjectConst>();
+  if (obj.isNull()) {
     return;
   }
   out->active = true;
-  copy_trunc(out->id, sizeof(out->id), n["id"] | "");
-  copy_trunc(out->title, sizeof(out->title), n["title"] | "");
-  copy_trunc(out->body, sizeof(out->body), n["body"] | "");
-  copy_trunc(out->priority, sizeof(out->priority), n["priority"] | "normal");
-  int ttl = n["ttl_s"] | 0;
+  copy_trunc(out->id, sizeof(out->id), obj["id"] | "");
+  copy_trunc(out->title, sizeof(out->title), obj["title"] | "");
+  copy_trunc(out->body, sizeof(out->body), obj["body"] | "");
+  copy_trunc(out->priority, sizeof(out->priority), obj["priority"] | "normal");
+  int ttl = obj["ttl_s"] | 0;
   if (ttl < 0) {
     ttl = 0;
   }
@@ -50,8 +51,8 @@ static void parse_notify(JsonVariantConst n, NotifyInfo *out) {
   out->ttl_s = static_cast<uint16_t>(ttl);
 }
 
-static bool parse_snapshot_object(JsonVariantConst root, Snapshot *out) {
-  if (!root.is<JsonObject>()) {
+static bool parse_snapshot_object(JsonObjectConst root, Snapshot *out) {
+  if (root.isNull()) {
     return false;
   }
   snapshot_clear(out);
@@ -92,16 +93,39 @@ static bool parse_snapshot_object(JsonVariantConst root, Snapshot *out) {
   return true;
 }
 
+static char parse_err[24];
+
+const char *snapshot_parse_error() {
+  return parse_err;
+}
+
 bool snapshot_parse(const char *json, size_t len, Snapshot *out) {
+  parse_err[0] = '\0';
   if (json == nullptr || out == nullptr || len == 0) {
+    copy_trunc(parse_err, sizeof(parse_err), "empty");
+    return false;
+  }
+  const char *start = json;
+  const char *end = json + len;
+  while (start < end && (*start == ' ' || *start == '\n' || *start == '\r' || *start == '\t')) {
+    start++;
+  }
+  if (start >= end || *start != '{') {
+    copy_trunc(parse_err, sizeof(parse_err), "not object");
     return false;
   }
   JsonDocument doc;
-  DeserializationError err = deserializeJson(doc, json, len);
+  DeserializationError err = deserializeJson(doc, start);
   if (err) {
+    copy_trunc(parse_err, sizeof(parse_err), err.c_str());
     return false;
   }
-  return parse_snapshot_object(doc.as<JsonVariantConst>(), out);
+  JsonObjectConst obj = doc.as<JsonObjectConst>();
+  if (!parse_snapshot_object(obj, out)) {
+    copy_trunc(parse_err, sizeof(parse_err), "shape");
+    return false;
+  }
+  return true;
 }
 
 bool ws_event_parse(const char *json, size_t len, WsEvent *out) {
@@ -121,10 +145,8 @@ bool ws_event_parse(const char *json, size_t len, WsEvent *out) {
   if (strcasecmp(type, "snapshot") == 0) {
     out->type = WsType::Snapshot;
     JsonVariantConst data = doc["data"];
-    if (data.isNull()) {
-      return parse_snapshot_object(doc.as<JsonVariantConst>(), &out->snapshot);
-    }
-    return parse_snapshot_object(data, &out->snapshot);
+    JsonObjectConst obj = data.isNull() ? doc.as<JsonObjectConst>() : data.as<JsonObjectConst>();
+    return parse_snapshot_object(obj, &out->snapshot);
   }
   if (strcasecmp(type, "notify") == 0) {
     out->type = WsType::Notify;

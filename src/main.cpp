@@ -25,6 +25,9 @@ static uint32_t last_ok = 0;
 static bool have_snap = false;
 static LedColor forced_led = LedColor::Off;
 static bool have_forced_led = false;
+static bool settings_open = false;
+static DeviceConfig edit_cfg;
+static char settings_status[48];
 
 static LedColor led_from_name(const char *name) {
   if (name == nullptr) {
@@ -124,13 +127,11 @@ static void redraw() {
   NetStatus st = net_status();
   bool online = cfg.demo || st.online;
   if (!have_snap) {
-    if (!online) {
-      ui_offline(&st, last_ok);
-    } else {
-      ui_splash("waiting for snapshot");
-    }
+    ui_offline(&cfg, &st, last_ok);
+  } else if (!online) {
+    ui_offline(&cfg, &st, last_ok);
   } else {
-    ui_render(&snap, page, online, hardware_wifi_rssi());
+    ui_render(&snap, page, online, hardware_wifi_rssi(), cfg.dark_mode);
     if (overlay_open && snap.notify.active) {
       uint32_t remain = overlay_until > millis() ? overlay_until - millis() : 0;
       ui_overlay(&snap.notify, remain);
@@ -149,8 +150,10 @@ static void apply_ws_events() {
         snap = ev.snapshot;
         have_snap = true;
         last_ok = millis();
-        if (strcasecmp(snap.display.page, "load") == 0) {
-          page = 1;
+        ui_note_metrics(snap.host.cpu_pct, snap.host.mem_pct, snap.host.disk_pct);
+        if (snap.display.page[0] && strcasecmp(snap.display.page, "status") != 0 &&
+            strcasecmp(snap.display.page, "home") != 0) {
+          page = ui_page_from_name(snap.display.page);
         }
         if (snap.notify.active) {
           open_overlay(&snap.notify);
@@ -174,7 +177,7 @@ static void apply_ws_events() {
         dirty = true;
         break;
       case WsType::Page:
-        page = strcasecmp(ev.page, "load") == 0 ? 1 : 0;
+        page = ui_page_from_name(ev.page);
         dirty = true;
         break;
       default:
@@ -198,12 +201,14 @@ void setup() {
   ui_splash("starting", FIRMWARE_VERSION);
 
   config_load(&cfg);
+  ui_set_dark(cfg.dark_mode);
 
   bool force_portal = hardware_boot_held(5000);
   if (force_portal) {
     ui_splash("config reset", "join agocyd-XXXX");
     config_clear();
     config_load(&cfg);
+    ui_set_dark(cfg.dark_mode);
   } else {
     ui_splash("connecting Wi-Fi", "hold BOOT 5s to reset");
   }
@@ -215,6 +220,7 @@ void setup() {
     provision_enter_token(&cfg);
     char line[40];
     snprintf(line, sizeof(line), "%s", WiFi.localIP().toString().c_str());
+    ui_set_link_info(line);
     ui_splash(cfg.demo ? "demo mode" : cfg.host, line);
     delay(800);
   }
@@ -227,7 +233,54 @@ void setup() {
     fill_demo(&snap);
     have_snap = true;
     last_ok = millis();
+    ui_note_metrics(snap.host.cpu_pct, snap.host.mem_pct, snap.host.disk_pct);
   }
+  redraw();
+}
+
+static void cycle_page(int dir) {
+  int n = static_cast<int>(page) + dir;
+  if (n < 0) {
+    n = UI_PAGE_COUNT - 1;
+  }
+  if (n >= UI_PAGE_COUNT) {
+    n = 0;
+  }
+  page = static_cast<uint8_t>(n);
+}
+
+static void open_settings() {
+  edit_cfg = cfg;
+  settings_status[0] = '\0';
+  settings_open = true;
+  ui_settings(&edit_cfg, settings_status);
+}
+
+static void settings_test() {
+  config_format_url(&edit_cfg);
+  net_reconfigure(&edit_cfg);
+  snprintf(settings_status, sizeof(settings_status), "testing...");
+  ui_settings(&edit_cfg, settings_status);
+  Snapshot tmp;
+  if (net_fetch_snapshot(&tmp)) {
+    snprintf(settings_status, sizeof(settings_status), "OK HTTP 200");
+  } else {
+    NetStatus st = net_status();
+    snprintf(settings_status, sizeof(settings_status), "%s", st.error[0] ? st.error : "test failed");
+  }
+  ui_settings(&edit_cfg, settings_status);
+}
+
+static void settings_save() {
+  config_format_url(&edit_cfg);
+  config_parse_url(&edit_cfg);
+  config_save(&edit_cfg);
+  cfg = edit_cfg;
+  ui_set_dark(cfg.dark_mode);
+  net_reconfigure(&cfg);
+  have_snap = false;
+  settings_open = false;
+  last_poll = 0;
   redraw();
 }
 
@@ -236,16 +289,81 @@ void loop() {
   apply_ws_events();
 
   TouchEvent touch = hardware_poll_touch();
+  if (settings_open) {
+    if (touch.tap) {
+      char hit = ui_settings_hit(touch.x, touch.y);
+      if (hit == 'h') {
+        edit_cfg.use_tls = !edit_cfg.use_tls;
+        if (edit_cfg.use_tls && (edit_cfg.port == 80 || edit_cfg.port == 8088)) {
+          edit_cfg.port = 8443;
+        } else if (!edit_cfg.use_tls && (edit_cfg.port == 443 || edit_cfg.port == 8443)) {
+          edit_cfg.port = 8088;
+        }
+        settings_status[0] = '\0';
+        ui_settings(&edit_cfg, settings_status);
+      } else if (hit == 'd') {
+        edit_cfg.dark_mode = !edit_cfg.dark_mode;
+        ui_set_dark(edit_cfg.dark_mode);
+        settings_status[0] = '\0';
+        ui_settings(&edit_cfg, settings_status);
+      } else if (hit == '-' && edit_cfg.port > 1) {
+        edit_cfg.port--;
+        ui_settings(&edit_cfg, settings_status);
+      } else if (hit == '+' && edit_cfg.port < 65535) {
+        edit_cfg.port++;
+        ui_settings(&edit_cfg, settings_status);
+      } else if (hit == 't') {
+        settings_test();
+      } else if (hit == 's') {
+        settings_save();
+      } else if (hit == 'b') {
+        ui_set_dark(cfg.dark_mode);
+        net_reconfigure(&cfg);
+        settings_open = false;
+        redraw();
+      } else if (hit == 'k') {
+        provision_enter_token(&edit_cfg, true);
+        ui_settings(&edit_cfg, settings_status);
+      } else if (hit == 'p') {
+        provision_edit_url(&edit_cfg);
+        settings_status[0] = '\0';
+        ui_settings(&edit_cfg, settings_status);
+      }
+    }
+    delay(20);
+    return;
+  }
+
   if (touch.tap) {
     if (overlay_open) {
       close_overlay(true);
       redraw();
+    } else {
+      NetStatus now = net_status();
+      bool online = cfg.demo || now.online;
+      if (ui_header_hit(touch.x, touch.y) == 'c') {
+        open_settings();
+      } else if ((!have_snap || !online) && ui_offline_hit(touch.x, touch.y) == 'e') {
+        open_settings();
+      } else if (have_snap && online) {
+        char hit = ui_page_hit(touch.x, touch.y);
+        if (hit == '<') {
+          cycle_page(-1);
+          redraw();
+        } else if (hit == '>') {
+          cycle_page(1);
+          redraw();
+        } else if (hit >= '0' && hit < '0' + UI_PAGE_COUNT) {
+          page = static_cast<uint8_t>(hit - '0');
+          redraw();
+        }
+      }
     }
   } else if (touch.swipe_left) {
-    page = page == 0 ? 1 : 0;
+    cycle_page(1);
     redraw();
   } else if (touch.swipe_right) {
-    page = page == 0 ? 1 : 0;
+    cycle_page(-1);
     redraw();
   }
 
@@ -261,6 +379,7 @@ void loop() {
       last_poll = millis();
       bool busy = snap.agent.busy;
       fill_demo(&snap);
+      ui_note_metrics(snap.host.cpu_pct, snap.host.mem_pct, snap.host.disk_pct);
       if (busy != snap.agent.busy || millis() - last_draw > 2000) {
         redraw();
       }
@@ -272,6 +391,7 @@ void loop() {
       snap = next;
       have_snap = true;
       last_ok = millis();
+      ui_note_metrics(next.host.cpu_pct, next.host.mem_pct, next.host.disk_pct);
       if (next.notify.active) {
         open_overlay(&next.notify);
       } else if (!overlay_open) {

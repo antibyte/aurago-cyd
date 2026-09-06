@@ -1,4 +1,5 @@
 #include "config_store.h"
+#include "factory_cfg.h"
 
 #include <Preferences.h>
 #include <stdio.h>
@@ -32,22 +33,34 @@ void config_load(DeviceConfig *cfg) {
   memset(cfg, 0, sizeof(*cfg));
   cfg->port = 8088;
   cfg->poll_seconds = 5;
+  cfg->dark_mode = true;
   copy_trunc_local(cfg->aurago_url, sizeof(cfg->aurago_url), "demo");
 
   if (!prefs.begin("aurago-cyd", true)) {
     cfg->demo = true;
+    if (factory_cfg_apply(cfg)) {
+      config_save(cfg);
+    }
     return;
   }
   String url = prefs.getString("url", "demo");
   String token = prefs.getString("token", "");
   uint8_t poll = prefs.getUChar("poll", 5);
+  bool dark = prefs.getBool("dark", true);
   prefs.end();
 
   copy_field(cfg->aurago_url, sizeof(cfg->aurago_url), url);
   copy_field(cfg->token, sizeof(cfg->token), token);
   cfg->poll_seconds = poll < 2 ? 2 : poll;
+  cfg->dark_mode = dark;
   config_parse_url(cfg);
   cfg->demo = config_is_demo(cfg);
+
+  if (!config_token_ready(cfg->token) || config_is_demo(cfg)) {
+    if (factory_cfg_apply(cfg) && (config_token_ready(cfg->token) || cfg->url_ok)) {
+      config_save(cfg);
+    }
+  }
 }
 
 void config_save(const DeviceConfig *cfg) {
@@ -60,6 +73,7 @@ void config_save(const DeviceConfig *cfg) {
   prefs.putString("url", cfg->aurago_url);
   prefs.putString("token", cfg->token);
   prefs.putUChar("poll", cfg->poll_seconds);
+  prefs.putBool("dark", cfg->dark_mode);
   prefs.end();
 }
 
@@ -187,13 +201,10 @@ bool config_parse_url(DeviceConfig *cfg) {
     host_len = static_cast<size_t>(colon - rest);
     cfg->port = static_cast<uint16_t>(atoi(colon + 1));
     if (cfg->port == 0) {
-      cfg->port = cfg->use_tls ? 443 : 80;
+      cfg->port = cfg->use_tls ? 443 : 8088;
     }
   } else {
     host_len = slash ? static_cast<size_t>(slash - rest) : strlen(rest);
-    if (!cfg->use_tls) {
-      cfg->port = 80;
-    }
   }
   if (host_len == 0 || host_len >= sizeof(cfg->host)) {
     return false;
@@ -213,4 +224,31 @@ bool config_parse_url(DeviceConfig *cfg) {
   cfg->url_ok = cfg->host[0] != '\0';
   cfg->demo = false;
   return cfg->url_ok;
+}
+
+void config_format_url(DeviceConfig *cfg) {
+  if (cfg == nullptr) {
+    return;
+  }
+  if (config_is_demo(cfg)) {
+    copy_trunc_local(cfg->aurago_url, sizeof(cfg->aurago_url), "demo");
+    cfg->url_ok = true;
+    cfg->demo = true;
+    return;
+  }
+  if (cfg->host[0] == '\0') {
+    cfg->url_ok = false;
+    return;
+  }
+  if (cfg->port == 0) {
+    cfg->port = cfg->use_tls ? 8443 : 8088;
+  }
+  const char *scheme = cfg->use_tls ? "https" : "http";
+  if (cfg->path_prefix[0] != '\0') {
+    snprintf(cfg->aurago_url, sizeof(cfg->aurago_url), "%s://%s:%u%s", scheme, cfg->host, cfg->port, cfg->path_prefix);
+  } else {
+    snprintf(cfg->aurago_url, sizeof(cfg->aurago_url), "%s://%s:%u", scheme, cfg->host, cfg->port);
+  }
+  cfg->url_ok = true;
+  cfg->demo = false;
 }
