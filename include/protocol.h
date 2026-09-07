@@ -12,6 +12,10 @@
 #define PROTO_LED_MAX 7
 #define PROTO_PAGE_MAX 11
 #define PROTO_PRIO_MAX 11
+#define PROTO_FEED_MAX 3
+#define PROTO_FEED_TITLE 23
+#define PROTO_FEED_BODY 31
+#define PROTO_SEV_MAX 11
 
 struct AgentInfo {
   bool busy;
@@ -50,6 +54,26 @@ struct NotifyInfo {
   uint16_t ttl_s;
 };
 
+struct FeedItem {
+  char sev[PROTO_SEV_MAX + 1];
+  char title[PROTO_FEED_TITLE + 1];
+  char body[PROTO_FEED_BODY + 1];
+  uint32_t age_s;
+  bool locked;
+};
+
+struct AlertsInfo {
+  int count;
+  uint8_t n;
+  FeedItem items[PROTO_FEED_MAX];
+};
+
+struct MeshInfo {
+  int unread;
+  uint8_t n;
+  FeedItem items[PROTO_FEED_MAX];
+};
+
 struct Snapshot {
   uint32_t ts;
   AgentInfo agent;
@@ -57,6 +81,8 @@ struct Snapshot {
   WorkInfo work;
   DisplayInfo display;
   NotifyInfo notify;
+  AlertsInfo alerts;
+  MeshInfo mesh;
 };
 
 enum class WsType {

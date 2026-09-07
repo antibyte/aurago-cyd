@@ -24,5 +24,7 @@
     "brightness": 180,
     "led": "green"
   },
-  "notify": null
+  "notify": null,
+  "alerts": { "count": 0, "items": [] },
+  "mesh": { "unread": 0, "items": [] }
 }

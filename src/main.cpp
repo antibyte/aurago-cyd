@@ -22,6 +22,8 @@ static uint32_t last_heartbeat = 0;
 static uint32_t last_draw = 0;
 static uint32_t last_brightness = 0;
 static uint32_t last_ok = 0;
+static uint32_t last_touch = 0;
+static uint32_t last_rotate = 0;
 static bool have_snap = false;
 static LedColor forced_led = LedColor::Off;
 static bool have_forced_led = false;
@@ -91,6 +93,17 @@ static void fill_demo(Snapshot *s) {
   s->work.notes_open = 3;
   s->work.last_user_h = 0.2f;
   copy_trunc(s->display.led, sizeof(s->display.led), s->agent.busy ? "yellow" : "green");
+  s->alerts.count = 2;
+  s->alerts.n = 2;
+  copy_trunc(s->alerts.items[0].sev, sizeof(s->alerts.items[0].sev), "warning");
+  copy_trunc(s->alerts.items[0].title, sizeof(s->alerts.items[0].title), "disk 90%");
+  copy_trunc(s->alerts.items[1].sev, sizeof(s->alerts.items[1].sev), "info");
+  copy_trunc(s->alerts.items[1].title, sizeof(s->alerts.items[1].title), "vpn ok");
+  s->mesh.unread = 1;
+  s->mesh.n = 1;
+  copy_trunc(s->mesh.items[0].title, sizeof(s->mesh.items[0].title), "Alice");
+  copy_trunc(s->mesh.items[0].body, sizeof(s->mesh.items[0].body), "ping");
+  s->mesh.items[0].age_s = 12;
 }
 
 static bool overlay_replace_ok(const NotifyInfo *incoming) {
@@ -98,6 +111,11 @@ static bool overlay_replace_ok(const NotifyInfo *incoming) {
     return true;
   }
   return notify_rank(incoming->priority) >= notify_rank(snap.notify.priority);
+}
+
+static void note_touch() {
+  last_touch = millis();
+  last_rotate = millis();
 }
 
 static void open_overlay(const NotifyInfo *n) {
@@ -111,6 +129,7 @@ static void open_overlay(const NotifyInfo *n) {
   snap.notify.active = true;
   overlay_open = true;
   overlay_until = millis() + static_cast<uint32_t>(notify_ttl(n)) * 1000UL;
+  note_touch();
 }
 
 static void close_overlay(bool ack) {
@@ -158,10 +177,18 @@ static void apply_ws_events() {
         if (snap.notify.active) {
           open_overlay(&snap.notify);
         }
+        if (snap.mesh.unread > 0 && strcasecmp(snap.display.page, "mesh") == 0) {
+          page = 4;
+          note_touch();
+        }
         dirty = true;
         break;
       case WsType::Notify:
         open_overlay(&ev.notify);
+        if (strncasecmp(ev.notify.title, "Mesh", 4) == 0) {
+          page = 4;
+        }
+        note_touch();
         dirty = true;
         break;
       case WsType::Clear:
@@ -178,6 +205,7 @@ static void apply_ws_events() {
         break;
       case WsType::Page:
         page = ui_page_from_name(ev.page);
+        note_touch();
         dirty = true;
         break;
       default:
@@ -235,6 +263,8 @@ void setup() {
     last_ok = millis();
     ui_note_metrics(snap.host.cpu_pct, snap.host.mem_pct, snap.host.disk_pct);
   }
+  last_touch = millis();
+  last_rotate = millis();
   redraw();
 }
 
@@ -334,6 +364,10 @@ void loop() {
     return;
   }
 
+  if (touch.tap || touch.swipe_left || touch.swipe_right) {
+    note_touch();
+  }
+
   if (touch.tap) {
     if (overlay_open) {
       close_overlay(true);
@@ -341,8 +375,15 @@ void loop() {
     } else {
       NetStatus now = net_status();
       bool online = cfg.demo || now.online;
-      if (ui_header_hit(touch.x, touch.y) == 'c') {
+      char head = ui_header_hit(touch.x, touch.y);
+      if (head == 'c') {
         open_settings();
+      } else if (head == 'a' && have_snap && online) {
+        page = 3;
+        redraw();
+      } else if (head == 'm' && have_snap && online) {
+        page = 4;
+        redraw();
       } else if ((!have_snap || !online) && ui_offline_hit(touch.x, touch.y) == 'e') {
         open_settings();
       } else if (have_snap && online) {
@@ -365,6 +406,15 @@ void loop() {
   } else if (touch.swipe_right) {
     cycle_page(-1);
     redraw();
+  }
+
+  if (!settings_open && !overlay_open && have_snap) {
+    uint32_t nowms = millis();
+    if (nowms - last_touch >= UI_IDLE_MS && nowms - last_rotate >= UI_ROTATE_MS) {
+      last_rotate = nowms;
+      cycle_page(1);
+      redraw();
+    }
   }
 
   if (overlay_open && millis() > overlay_until) {

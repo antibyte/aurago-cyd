@@ -7,16 +7,16 @@ and agent-pushed notification overlays.
 
 ```
 ┌────────────────────────────────┐
-│ AURAGO  HOME   21:04  CFG  ▮▮▮ │
-│  IDLE              grok-4      │
-│  NOW  waiting                  │
+│ 21:04  Home     3  2  CFG  ▮▮▮ │
+│  21:04              Idle       │
+│  grok-4     waiting            │
 │  LAST 12m     MISSIONS 0 run   │
 │  CPU  ▁▂▃▅▄▆▅▃   42%           │
-│           ● ○ ○ ○              │
+│           ● ○ ○ ○ ○            │
 └────────────────────────────────┘
 ```
 
-Four swipe pages: **HOME** (hero idle/busy + sparkline), **LOAD** (CPU/RAM/disk arc gauges), **WORK** (missions + notes), **HOST** (uptime, RSSI, IP). Tap the footer dots or `<` `>`. Orbitron + 7-segment digit fonts. Dark mode is the default.
+Five pages: **Home**, **Load**, **Work**, **Alerts** (system warnings + count bubble), **Mesh** (MeshCore inbox). After 10s without touch the pages rotate every 5s. Incoming notify/mesh/warnings jump immediately. Tap footer dots, badges, or swipe. Dark mode is the default.
 
 ## Hardware
 

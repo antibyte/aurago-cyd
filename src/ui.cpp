@@ -42,12 +42,12 @@ void ui_set_dark(bool dark) {
     COL_BAD = 0xF800;
     COL_BAR_BG = 0x1082;
   } else {
-    COL_BG = 0xFFFF;
-    COL_PANEL = 0xEF7D;
+    COL_BG = 0xEF7D;
+    COL_PANEL = 0xFFFF;
     COL_LINE = 0xC618;
     COL_TEXT = 0x0000;
     COL_MUTED = 0x6B6D;
-    COL_ACCENT = 0x001F;
+    COL_ACCENT = 0x03DF;
     COL_GOOD = 0x03A0;
     COL_WARN = 0xC400;
     COL_BAD = 0xC800;
@@ -79,8 +79,11 @@ uint8_t ui_page_from_name(const char *name) {
   if (strcasecmp(name, "work") == 0) {
     return 2;
   }
-  if (strcasecmp(name, "host") == 0) {
+  if (strcasecmp(name, "alerts") == 0) {
     return 3;
+  }
+  if (strcasecmp(name, "mesh") == 0) {
+    return 4;
   }
   return 0;
 }
@@ -88,13 +91,15 @@ uint8_t ui_page_from_name(const char *name) {
 static const char *page_title(uint8_t page) {
   switch (page) {
     case 1:
-      return "LOAD";
+      return "Load";
     case 2:
-      return "WORK";
+      return "Work";
     case 3:
-      return "HOST";
+      return "Alerts";
+    case 4:
+      return "Mesh";
     default:
-      return "HOME";
+      return "Home";
   }
 }
 
@@ -261,27 +266,58 @@ static void draw_gauge(int cx, int cy, int r, float pct, const char *label) {
   tft.drawCentreString(label, cx, cy + r - 2, 2);
 }
 
-static void draw_header(const char *title, bool online, int8_t rssi) {
-  tft.fillRect(0, 0, SCREEN_W, 28, COL_PANEL);
+static void draw_badge(int cx, int cy, int count, uint16_t col) {
+  if (count <= 0) {
+    tft.drawCircle(cx, cy, 8, COL_LINE);
+    return;
+  }
+  tft.fillCircle(cx, cy, 8, col);
+  char b[4];
+  if (count > 9) {
+    snprintf(b, sizeof(b), "9+");
+  } else {
+    snprintf(b, sizeof(b), "%d", count);
+  }
+  use_bitmap(1);
+  tft.setTextColor(COL_BG, col);
+  tft.drawCentreString(b, cx, cy - 4, 1);
+}
+
+static void draw_header(const char *title, bool online, int8_t rssi, int alerts, int mesh) {
+  tft.fillRect(0, 0, SCREEN_W, 32, COL_PANEL);
   tft.fillRect(0, 0, SCREEN_W, 2, COL_ACCENT);
-  use_bitmap(2);
-  tft.setTextColor(COL_ACCENT, COL_PANEL);
-  tft.drawString("AURAGO", 8, 8, 2);
-  tft.setTextColor(COL_TEXT, COL_PANEL);
-  tft.drawString(title, 86, 8, 2);
   char clk[8];
   clock_text(clk, sizeof(clk));
+  use_bitmap(2);
+  tft.setTextColor(COL_TEXT, COL_PANEL);
+  tft.drawString(clk, 8, 9, 2);
   tft.setTextColor(COL_MUTED, COL_PANEL);
-  tft.drawRightString(clk, 226, 8, 2);
-  tft.fillRoundRect(232, 4, 46, 20, 3, COL_ACCENT);
+  tft.drawString(title, 62, 9, 2);
+  draw_badge(184, 16, alerts, COL_BAD);
+  draw_badge(210, 16, mesh, COL_ACCENT);
+  tft.fillRoundRect(228, 6, 44, 20, 10, COL_ACCENT);
+  use_bitmap(2);
   tft.setTextColor(COL_BG, COL_ACCENT);
-  tft.drawCentreString("CFG", 255, 7, 2);
-  draw_wifi(284, 8, rssi, online);
-  tft.drawFastHLine(0, 28, SCREEN_W, COL_LINE);
+  tft.drawCentreString("CFG", 250, 9, 2);
+  draw_wifi(284, 10, rssi, online);
+  tft.drawFastHLine(0, 32, SCREEN_W, COL_LINE);
+}
+
+static void draw_header(const char *title, bool online, int8_t rssi) {
+  draw_header(title, online, rssi, 0, 0);
 }
 
 char ui_header_hit(int16_t x, int16_t y) {
-  if (y <= 28 && x >= 232 && x < 280) {
+  if (y > 32) {
+    return 0;
+  }
+  if (x >= 168 && x < 198) {
+    return 'a';
+  }
+  if (x >= 198 && x < 226) {
+    return 'm';
+  }
+  if (x >= 228 && x < 276) {
     return 'c';
   }
   return 0;
@@ -583,30 +619,28 @@ char ui_settings_hit(int16_t x, int16_t y) {
   return 0;
 }
 
-static void draw_home_page(const Snapshot *snap) {
+static void draw_home_page(const Snapshot *snap, int8_t rssi, bool online) {
   bool busy = snap->agent.busy;
   uint16_t state_col = busy ? COL_WARN : COL_GOOD;
-  draw_card(10, 34, 300, 92);
-  draw_accent_bar(10, 34, 92, state_col);
-
+  draw_card(10, 40, 300, 88);
+  char clk[8];
+  clock_text(clk, sizeof(clk));
   use_orbitron(true);
-  tft.setTextColor(state_col);
+  tft.setTextColor(COL_TEXT);
   tft.setTextDatum(TL_DATUM);
-  tft.drawString(busy ? "BUSY" : "IDLE", 22, 44);
-
+  tft.drawString(clk, 22, 48);
   use_bitmap(2);
-  tft.fillRoundRect(210, 42, 88, 20, 3, COL_BG);
-  tft.setTextColor(COL_ACCENT, COL_BG);
-  const char *model = snap->agent.model[0] ? snap->agent.model : "model";
-  tft.drawCentreString(model, 254, 44, 2);
-
+  tft.fillRoundRect(200, 50, 96, 24, 12, state_col);
+  tft.setTextColor(COL_BG, state_col);
+  tft.drawCentreString(busy ? "Busy" : "Idle", 248, 54, 2);
   tft.setTextColor(COL_MUTED, COL_PANEL);
-  tft.drawString("NOW", 22, 86, 1);
+  const char *model = snap->agent.model[0] ? snap->agent.model : "model";
+  tft.drawString(model, 22, 100, 2);
   const char *task = snap->agent.task[0] ? snap->agent.task : "waiting";
-  draw_fit(task, 22, 98, 270, 2, COL_TEXT, COL_PANEL);
+  draw_fit(task, 120, 100, 178, 2, COL_TEXT, COL_PANEL);
 
-  draw_card(10, 132, 145, 42);
-  draw_card(165, 132, 145, 42);
+  draw_card(10, 134, 145, 40);
+  draw_card(165, 134, 145, 40);
   use_bitmap(1);
   tft.setTextColor(COL_MUTED, COL_PANEL);
   tft.drawString("LAST", 20, 138, 1);
@@ -615,20 +649,29 @@ static void draw_home_page(const Snapshot *snap) {
   format_last(last, sizeof(last), snap->work.last_user_h);
   use_bitmap(2);
   tft.setTextColor(COL_TEXT, COL_PANEL);
-  tft.drawString(last, 20, 152, 2);
+  tft.drawString(last, 20, 150, 2);
   char miss[24];
   snprintf(miss, sizeof(miss), "%d run  %d q", snap->work.missions_running, snap->work.missions_queued);
-  tft.drawString(miss, 175, 152, 2);
+  tft.drawString(miss, 175, 150, 2);
 
   draw_card(10, 178, 300, 36);
   tft.drawFastHLine(20, 196, 280, COL_LINE);
   draw_spark(20, 184, 280, 24, hist_cpu, COL_ACCENT);
   use_bitmap(1);
   tft.setTextColor(COL_MUTED, COL_PANEL);
-  tft.drawString("CPU", 20, 182, 1);
-  char cpu[12];
-  snprintf(cpu, sizeof(cpu), "%.0f%%", snap->host.cpu_pct);
-  tft.drawRightString(cpu, 300, 182, 1);
+  char cpu[16];
+  snprintf(cpu, sizeof(cpu), "CPU %.0f%%", snap->host.cpu_pct);
+  tft.drawString(cpu, 20, 180, 1);
+  char up[24];
+  format_uptime(up, sizeof(up), snap->host.host_uptime_s);
+  char link[40];
+  if (g_ip[0]) {
+    snprintf(link, sizeof(link), "%s  %ddBm", g_ip, static_cast<int>(rssi));
+  } else {
+    snprintf(link, sizeof(link), "%s  %ddBm", up, static_cast<int>(rssi));
+  }
+  tft.setTextColor(online ? COL_ACCENT : COL_BAD, COL_PANEL);
+  tft.drawRightString(link, 300, 180, 1);
 }
 
 static void draw_load_page(const Snapshot *snap) {
@@ -695,79 +738,68 @@ static void draw_work_page(const Snapshot *snap) {
   draw_fit(task, 177, 182, 120, 2, COL_MUTED, COL_PANEL);
 }
 
-static void draw_host_page(const Snapshot *snap, bool online, int8_t rssi) {
-  char agent_up[24];
-  char host_up[24];
-  format_uptime(agent_up, sizeof(agent_up), snap->host.uptime_s);
-  format_uptime(host_up, sizeof(host_up), snap->host.host_uptime_s);
-
-  draw_card(10, 36, 145, 70);
-  use_bitmap(1);
-  tft.setTextColor(COL_MUTED, COL_PANEL);
-  tft.drawString("AGENT UP", 20, 44, 1);
-  use_orbitron(false);
-  tft.setTextColor(COL_TEXT);
-  tft.setTextDatum(TL_DATUM);
-  tft.drawString(agent_up, 20, 62);
-
-  draw_card(165, 36, 145, 70);
-  use_bitmap(1);
-  tft.setTextColor(COL_MUTED, COL_PANEL);
-  tft.drawString("HOST UP", 175, 44, 1);
-  use_orbitron(false);
-  tft.setTextColor(COL_TEXT);
-  tft.setTextDatum(TL_DATUM);
-  tft.drawString(host_up, 175, 62);
-
-  draw_card(10, 112, 300, 48);
-  use_bitmap(2);
-  tft.setTextColor(COL_MUTED, COL_PANEL);
-  tft.drawString("RSSI", 20, 120, 2);
-  char db[16];
-  snprintf(db, sizeof(db), "%d dBm", static_cast<int>(rssi));
-  tft.setTextColor(online ? COL_ACCENT : COL_BAD, COL_PANEL);
-  tft.drawRightString(db, 300, 120, 2);
-  int bars = 1;
-  if (rssi > -55) {
-    bars = 8;
-  } else if (rssi > -60) {
-    bars = 7;
-  } else if (rssi > -65) {
-    bars = 6;
-  } else if (rssi > -70) {
-    bars = 5;
-  } else if (rssi > -75) {
-    bars = 4;
-  } else if (rssi > -80) {
-    bars = 3;
-  } else if (rssi > -85) {
-    bars = 2;
+static uint16_t sev_color(const char *sev) {
+  if (sev && (strcasecmp(sev, "critical") == 0 || strcasecmp(sev, "error") == 0)) {
+    return COL_BAD;
   }
-  if (!online) {
-    bars = 1;
+  if (sev && strcasecmp(sev, "warning") == 0) {
+    return COL_WARN;
   }
-  for (int i = 0; i < 8; i++) {
-    int bh = 6 + i * 2;
-    int bx = 20 + i * 16;
-    uint16_t c = i < bars ? (online ? COL_ACCENT : COL_BAD) : COL_BAR_BG;
-    tft.fillRoundRect(bx, 148 - bh, 12, bh, 2, c);
-  }
+  return COL_ACCENT;
+}
 
-  draw_card(10, 166, 300, 48);
-  use_bitmap(1);
-  tft.setTextColor(COL_MUTED, COL_PANEL);
-  tft.drawString("LINK", 20, 172, 1);
+static void draw_row(int y, const char *title, const char *sub, uint16_t accent) {
+  draw_card(10, y, 300, 42);
+  tft.fillCircle(24, y + 21, 5, accent);
   use_bitmap(2);
   tft.setTextColor(COL_TEXT, COL_PANEL);
-  tft.drawString(g_ip[0] ? g_ip : "--", 20, 186, 2);
-  char meta[40];
-  snprintf(meta, sizeof(meta), "fw %s  led %s", FIRMWARE_VERSION, snap->display.led[0] ? snap->display.led : "-");
+  draw_fit(title && title[0] ? title : "-", 40, y + 6, 250, 2, COL_TEXT, COL_PANEL);
   tft.setTextColor(COL_MUTED, COL_PANEL);
-  tft.drawRightString(meta, 300, 186, 2);
-  const char *pers = snap->agent.personality[0] ? snap->agent.personality : "";
-  if (pers[0]) {
-    tft.setTextColor(COL_ACCENT, COL_PANEL);
-    tft.drawString(pers, 20, 202, 1);
+  draw_fit(sub && sub[0] ? sub : " ", 40, y + 24, 250, 1, COL_MUTED, COL_PANEL);
+}
+
+static void draw_alerts_page(const Snapshot *snap) {
+  use_bitmap(2);
+  tft.setTextColor(COL_MUTED, COL_BG);
+  char head[24];
+  snprintf(head, sizeof(head), "%d warnings", snap->alerts.count);
+  tft.drawString(head, 12, 40, 2);
+  if (snap->alerts.n == 0) {
+    draw_card(10, 68, 300, 48);
+    tft.setTextColor(COL_GOOD, COL_PANEL);
+    tft.drawString("All clear", 24, 84, 2);
+    return;
+  }
+  for (uint8_t i = 0; i < snap->alerts.n; i++) {
+    const FeedItem *it = &snap->alerts.items[i];
+    draw_row(68 + i * 48, it->title, it->sev, sev_color(it->sev));
+  }
+}
+
+static void draw_mesh_page(const Snapshot *snap) {
+  use_bitmap(2);
+  tft.setTextColor(COL_MUTED, COL_BG);
+  char head[24];
+  snprintf(head, sizeof(head), "%d unread", snap->mesh.unread);
+  tft.drawString(head, 12, 40, 2);
+  if (snap->mesh.n == 0) {
+    draw_card(10, 68, 300, 48);
+    tft.setTextColor(COL_MUTED, COL_PANEL);
+    tft.drawString("No messages", 24, 84, 2);
+    return;
+  }
+  for (uint8_t i = 0; i < snap->mesh.n; i++) {
+    const FeedItem *it = &snap->mesh.items[i];
+    const char *body = it->locked ? "locked" : (it->body[0] ? it->body : "message");
+    char sub[40];
+    if (it->age_s >= 3600) {
+      snprintf(sub, sizeof(sub), "%uh  %s", it->age_s / 3600, body);
+    } else if (it->age_s >= 60) {
+      snprintf(sub, sizeof(sub), "%um  %s", it->age_s / 60, body);
+    } else {
+      snprintf(sub, sizeof(sub), "%s", body);
+    }
+    draw_row(68 + i * 48, it->title, sub, it->locked ? COL_WARN : COL_ACCENT);
   }
 }
 
@@ -777,15 +809,19 @@ void ui_render(const Snapshot *snap, uint8_t page, bool online, int8_t rssi, boo
   if (page >= UI_PAGE_COUNT) {
     page = 0;
   }
-  draw_header(page_title(page), online, rssi);
+  int alerts = snap ? snap->alerts.count : 0;
+  int mesh = snap ? snap->mesh.unread : 0;
+  draw_header(page_title(page), online, rssi, alerts, mesh);
   if (page == 1) {
     draw_load_page(snap);
   } else if (page == 2) {
     draw_work_page(snap);
   } else if (page == 3) {
-    draw_host_page(snap, online, rssi);
+    draw_alerts_page(snap);
+  } else if (page == 4) {
+    draw_mesh_page(snap);
   } else {
-    draw_home_page(snap);
+    draw_home_page(snap, rssi, online);
   }
   draw_footer(page);
 }

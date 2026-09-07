@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Glass dashboard: four pages, gauges, sparkline, Orbitron, pager UX."""
+"""Glass dashboard: five pages, badges, carousel, alerts/mesh."""
 
 from __future__ import annotations
 
@@ -16,41 +16,33 @@ class UIPagesTests(unittest.TestCase):
         self.main = (ROOT / "src" / "main.cpp").read_text(encoding="utf-8")
         self.ini = (ROOT / "platformio.ini").read_text(encoding="utf-8")
         self.proto = (ROOT / "docs" / "protocol.md").read_text(encoding="utf-8")
+        self.protocol_h = (ROOT / "include" / "protocol.h").read_text(encoding="utf-8")
+        self.protocol_c = (ROOT / "src" / "protocol.cpp").read_text(encoding="utf-8")
 
-    def test_four_dashboard_pages(self) -> None:
-        self.assertIn("#define UI_PAGE_COUNT 4", self.ui_h)
-        for name in ("HOME", "LOAD", "WORK", "HOST"):
+    def test_five_dashboard_pages(self) -> None:
+        self.assertIn("#define UI_PAGE_COUNT 5", self.ui_h)
+        for name in ("Home", "Load", "Work", "Alerts", "Mesh"):
             self.assertIn(name, self.ui_c)
-        self.assertIn("ui_page_from_name", self.ui_h)
-        self.assertIn("ui_page_hit", self.ui_h)
-        self.assertIn("ui_note_metrics", self.ui_h)
-        self.assertIn("ui_set_link_info", self.ui_h)
+        self.assertIn("draw_alerts_page", self.ui_c)
+        self.assertIn("draw_mesh_page", self.ui_c)
+        self.assertIn("draw_badge", self.ui_c)
 
-    def test_fancy_fonts_and_diagrams(self) -> None:
-        self.assertIn("-DLOAD_FONT6", self.ini)
-        self.assertIn("-DLOAD_FONT7", self.ini)
-        self.assertIn("-DLOAD_GFXFF", self.ini)
-        self.assertIn("Orbitron_Light_32", self.ui_c)
-        self.assertIn("Orbitron_Light_24", self.ui_c)
-        self.assertIn("drawArc", self.ui_c)
-        self.assertIn("ui_note_metrics", self.ui_c)
-        self.assertIn("draw_spark", self.ui_c)
+    def test_carousel_idle_rotate(self) -> None:
+        self.assertIn("UI_IDLE_MS", self.ui_h)
+        self.assertIn("UI_ROTATE_MS", self.main)
+        self.assertIn("note_touch", self.main)
+        self.assertIn("last_touch", self.main)
 
-    def test_pager_ux_and_wrap(self) -> None:
-        self.assertIn("ui_page_hit", self.main)
-        self.assertIn("UI_PAGE_COUNT", self.main)
-        self.assertIn("ui_note_metrics", self.main)
-        self.assertIn("ui_set_link_info", self.main)
-        self.assertIn("ui_page_from_name", self.main)
-        self.assertNotIn("page == 0 ? 1 : 0", self.main)
-        self.assertNotIn("%u/2", self.ui_c)
-
-    def test_protocol_lists_new_pages(self) -> None:
-        self.assertIn("work", self.proto)
-        self.assertIn("host", self.proto)
+    def test_alerts_mesh_protocol(self) -> None:
+        self.assertIn("struct AlertsInfo", self.protocol_h)
+        self.assertIn("struct MeshInfo", self.protocol_h)
+        self.assertIn('root["alerts"]', self.protocol_c)
+        self.assertIn('root["mesh"]', self.protocol_c)
+        self.assertIn("alerts", self.proto)
+        self.assertIn("mesh", self.proto)
 
     def test_firmware_version_bumped(self) -> None:
-        self.assertIn('-DFIRMWARE_VERSION=\\"0.2.1\\"', self.ini)
+        self.assertIn('-DFIRMWARE_VERSION=\\"0.3.0\\"', self.ini)
 
 
 if __name__ == "__main__":

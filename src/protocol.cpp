@@ -51,6 +51,27 @@ static void parse_notify(JsonVariantConst n, NotifyInfo *out) {
   out->ttl_s = static_cast<uint16_t>(ttl);
 }
 
+static void parse_feed_items(JsonVariantConst arr, FeedItem *items, uint8_t *n, uint8_t cap) {
+  *n = 0;
+  JsonArrayConst list = arr.as<JsonArrayConst>();
+  if (list.isNull()) {
+    return;
+  }
+  for (JsonVariantConst v : list) {
+    if (*n >= cap) {
+      break;
+    }
+    FeedItem *it = &items[*n];
+    memset(it, 0, sizeof(*it));
+    copy_trunc(it->sev, sizeof(it->sev), v["sev"] | "");
+    copy_trunc(it->title, sizeof(it->title), v["title"] | v["from"] | "");
+    copy_trunc(it->body, sizeof(it->body), v["body"] | v["preview"] | "");
+    it->age_s = v["age_s"] | 0u;
+    it->locked = v["protected"] | false;
+    (*n)++;
+  }
+}
+
 static bool parse_snapshot_object(JsonObjectConst root, Snapshot *out) {
   if (root.isNull()) {
     return false;
@@ -90,6 +111,14 @@ static bool parse_snapshot_object(JsonObjectConst root, Snapshot *out) {
   copy_trunc(out->display.led, sizeof(out->display.led), display["led"] | "green");
 
   parse_notify(root["notify"], &out->notify);
+
+  JsonVariantConst alerts = root["alerts"];
+  out->alerts.count = alerts["count"] | 0;
+  parse_feed_items(alerts["items"], out->alerts.items, &out->alerts.n, PROTO_FEED_MAX);
+
+  JsonVariantConst mesh = root["mesh"];
+  out->mesh.unread = mesh["unread"] | 0;
+  parse_feed_items(mesh["items"], out->mesh.items, &out->mesh.n, PROTO_FEED_MAX);
   return true;
 }
 

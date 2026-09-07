@@ -39,7 +39,15 @@ Payloads stay at or under ~1.5 KB. Unknown JSON fields are ignored.
     "brightness": 180,
     "led": "green"
   },
-  "notify": null
+  "notify": null,
+  "alerts": {
+    "count": 1,
+    "items": [{ "sev": "warning", "title": "disk 90%" }]
+  },
+  "mesh": {
+    "unread": 1,
+    "items": [{ "from": "Alice", "preview": "ok", "protected": false, "age_s": 12 }]
+  }
 }
 ```
 
@@ -58,7 +66,8 @@ Payloads stay at or under ~1.5 KB. Unknown JSON fields are ignored.
 String limits (firmware truncates): `title` 32, `body` 96, `task` 40, `model` 23.
 
 `priority`: `low` | `normal` | `high` | `critical`.  
-`display.page`: `status` | `home` | `load` | `work` | `host`.  
+`display.page`: `status` | `home` | `load` | `work` | `host` | `alerts` | `mesh`.  
+`alerts` is the chat warning list (count + top titles). `mesh` is the MeshCore messenger projection (unread + last chats). Protected mesh previews are `locked`, never raw radio text.  
 `display.led`: `off` | `green` | `yellow` | `red` | `blue`.  
 `display.brightness`: 0–255.
 

@@ -26,6 +26,12 @@ class SnapshotParseTests(unittest.TestCase):
         self.assertIn("JsonObjectConst", proto)
         self.assertNotIn("!root.is<JsonObject>()", proto)
 
+    def test_parses_alerts_and_mesh_feeds(self) -> None:
+        proto = (ROOT / "src" / "protocol.cpp").read_text(encoding="utf-8")
+        self.assertIn("parse_feed_items", proto)
+        self.assertIn('root["alerts"]', proto)
+        self.assertIn('root["mesh"]', proto)
+
 
 if __name__ == "__main__":
     unittest.main()

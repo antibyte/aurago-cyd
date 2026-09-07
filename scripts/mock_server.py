@@ -46,6 +46,8 @@ def default_snapshot() -> dict[str, Any]:
             "led": "yellow" if busy else "green",
         },
         "notify": None,
+        "alerts": {"count": 0, "items": []},
+        "mesh": {"unread": 0, "items": []},
     }
 
 

@@ -5,7 +5,9 @@
 #include "protocol.h"
 #include "net_client.h"
 
-#define UI_PAGE_COUNT 4
+#define UI_PAGE_COUNT 5
+#define UI_IDLE_MS 10000
+#define UI_ROTATE_MS 5000
 
 void ui_begin();
 void ui_set_dark(bool dark);
