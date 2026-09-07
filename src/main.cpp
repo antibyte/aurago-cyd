@@ -23,7 +23,8 @@ static uint32_t last_draw = 0;
 static uint32_t last_brightness = 0;
 static uint32_t last_ok = 0;
 static uint32_t last_touch = 0;
-static uint32_t last_rotate = 0;
+static uint32_t last_page_ms = 0;
+static bool carousel_on = false;
 static bool have_snap = false;
 static LedColor forced_led = LedColor::Off;
 static bool have_forced_led = false;
@@ -115,7 +116,8 @@ static bool overlay_replace_ok(const NotifyInfo *incoming) {
 
 static void note_touch() {
   last_touch = millis();
-  last_rotate = millis();
+  last_page_ms = millis();
+  carousel_on = false;
 }
 
 static void open_overlay(const NotifyInfo *n) {
@@ -166,29 +168,25 @@ static void apply_ws_events() {
   while (net_take_event(&ev)) {
     switch (ev.type) {
       case WsType::Snapshot:
+        // Refresh metrics only. Page jumps come from WsType::Page / Notify,
+        // otherwise a stuck hub display.page (alerts/mesh) steals the glass.
         snap = ev.snapshot;
         have_snap = true;
         last_ok = millis();
         ui_note_metrics(snap.host.cpu_pct, snap.host.mem_pct, snap.host.disk_pct);
-        if (snap.display.page[0] && strcasecmp(snap.display.page, "status") != 0 &&
-            strcasecmp(snap.display.page, "home") != 0) {
-          page = ui_page_from_name(snap.display.page);
-        }
         if (snap.notify.active) {
           open_overlay(&snap.notify);
-        }
-        if (snap.mesh.unread > 0 && strcasecmp(snap.display.page, "mesh") == 0) {
-          page = 4;
-          note_touch();
         }
         dirty = true;
         break;
       case WsType::Notify:
         open_overlay(&ev.notify);
-        if (strncasecmp(ev.notify.title, "Mesh", 4) == 0) {
+        if (!settings_open && strncasecmp(ev.notify.title, "Mesh", 4) == 0) {
           page = 4;
         }
-        note_touch();
+        if (!settings_open) {
+          note_touch();
+        }
         dirty = true;
         break;
       case WsType::Clear:
@@ -204,15 +202,17 @@ static void apply_ws_events() {
         dirty = true;
         break;
       case WsType::Page:
-        page = ui_page_from_name(ev.page);
-        note_touch();
-        dirty = true;
+        if (!settings_open) {
+          page = ui_page_from_name(ev.page);
+          note_touch();
+          dirty = true;
+        }
         break;
       default:
         break;
     }
   }
-  if (dirty) {
+  if (dirty && !settings_open) {
     redraw();
   }
 }
@@ -264,7 +264,8 @@ void setup() {
     ui_note_metrics(snap.host.cpu_pct, snap.host.mem_pct, snap.host.disk_pct);
   }
   last_touch = millis();
-  last_rotate = millis();
+  last_page_ms = millis();
+  carousel_on = false;
   redraw();
 }
 
@@ -277,9 +278,11 @@ static void cycle_page(int dir) {
     n = 0;
   }
   page = static_cast<uint8_t>(n);
+  last_page_ms = millis();
 }
 
 static void open_settings() {
+  note_touch();
   edit_cfg = cfg;
   settings_status[0] = '\0';
   settings_open = true;
@@ -311,6 +314,7 @@ static void settings_save() {
   have_snap = false;
   settings_open = false;
   last_poll = 0;
+  note_touch();
   redraw();
 }
 
@@ -321,6 +325,7 @@ void loop() {
   TouchEvent touch = hardware_poll_touch();
   if (settings_open) {
     if (touch.tap) {
+      note_touch();
       char hit = ui_settings_hit(touch.x, touch.y);
       if (hit == 'h') {
         edit_cfg.use_tls = !edit_cfg.use_tls;
@@ -350,6 +355,7 @@ void loop() {
         ui_set_dark(cfg.dark_mode);
         net_reconfigure(&cfg);
         settings_open = false;
+        note_touch();
         redraw();
       } else if (hit == 'k') {
         provision_enter_token(&edit_cfg, true);
@@ -410,8 +416,15 @@ void loop() {
 
   if (!settings_open && !overlay_open && have_snap) {
     uint32_t nowms = millis();
-    if (nowms - last_touch >= UI_IDLE_MS && nowms - last_rotate >= UI_ROTATE_MS) {
-      last_rotate = nowms;
+    if (!carousel_on) {
+      if (nowms - last_touch >= UI_IDLE_MS) {
+        // Arm without advancing: the current page (often Home) still gets a
+        // full UI_ROTATE_MS dwell. Advancing here skipped that slot because
+        // last_touch is already UI_IDLE_MS old.
+        carousel_on = true;
+        last_page_ms = nowms;
+      }
+    } else if (nowms - last_page_ms >= UI_ROTATE_MS) {
       cycle_page(1);
       redraw();
     }
