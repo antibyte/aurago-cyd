@@ -24,5 +24,6 @@ void ui_offline(const DeviceConfig *cfg, const NetStatus *st, uint32_t last_ok_m
 char ui_offline_hit(int16_t x, int16_t y);
 void ui_settings(const DeviceConfig *cfg, const char *status_line);
 char ui_settings_hit(int16_t x, int16_t y);
-void ui_render(const Snapshot *snap, uint8_t page, bool online, int8_t rssi, bool dark);
+void ui_render(const Snapshot *snap, uint8_t page, bool online, int8_t rssi, bool dark,
+               const NotifyInfo *notification = nullptr, uint32_t remain_ms = 0);
 void ui_overlay(const NotifyInfo *n, uint32_t remain_ms);

@@ -1,4 +1,5 @@
 #include "net_client.h"
+#include "provision.h"
 
 #include <Arduino.h>
 #include <HTTPClient.h>
@@ -22,6 +23,8 @@ static WebSocketsClient ws;
 static bool ws_started = false;
 static uint32_t backoff_ms = 1000;
 static uint32_t next_retry_ms = 0;
+static uint32_t last_wifi_try = 0;
+static bool wifi_was_up = false;
 
 static const int EVENT_QUEUE = 6;
 static WsEvent events[EVENT_QUEUE];
@@ -124,6 +127,10 @@ static void ws_event(WStype_t type, uint8_t *payload, size_t length) {
       break;
     case WStype_DISCONNECTED:
       status.ws = false;
+      if (WiFi.status() != WL_CONNECTED) {
+        status.online = false;
+        set_error("wifi down");
+      }
       break;
     case WStype_TEXT: {
       WsEvent ev{};
@@ -171,6 +178,11 @@ void net_begin(const DeviceConfig *in) {
   backoff_ms = 1000;
   next_retry_ms = 0;
   status.wifi = WiFi.status() == WL_CONNECTED;
+  wifi_was_up = status.wifi;
+  last_wifi_try = millis();
+  if (status.wifi) {
+    wifi_apply_hold();
+  }
   if (!cfg.demo && cfg.url_ok) {
     ws_start();
   }
@@ -185,7 +197,38 @@ void net_reconfigure(const DeviceConfig *in) {
 }
 
 void net_loop() {
-  status.wifi = WiFi.status() == WL_CONNECTED;
+  wl_status_t st = WiFi.status();
+  bool up = st == WL_CONNECTED;
+  status.wifi = up;
+  if (!up) {
+    status.online = false;
+    status.ws = false;
+    if (status.error[0] == '\0') {
+      set_error("wifi down");
+    }
+    uint32_t now = millis();
+    // last_wifi_try starts at net_begin, so the first retry waits a full
+    // interval. Calling reconnect() during association aborts the join.
+    if (now - last_wifi_try >= 8000) {
+      last_wifi_try = now;
+      if (st == WL_DISCONNECTED || st == WL_CONNECTION_LOST || st == WL_CONNECT_FAILED ||
+          st == WL_NO_SSID_AVAIL) {
+        Serial.printf("wifi: reconnect status=%d\n", static_cast<int>(st));
+        WiFi.setAutoReconnect(true);
+        WiFi.reconnect();
+      }
+    }
+  } else if (!wifi_was_up) {
+    wifi_apply_hold();
+    set_error("");
+    backoff_ms = 1000;
+    next_retry_ms = 0;
+    if (!ws_started && !cfg.demo && cfg.url_ok) {
+      ws_start();
+    }
+    Serial.printf("wifi: up %s\n", WiFi.localIP().toString().c_str());
+  }
+  wifi_was_up = up;
   if (ws_started) {
     ws.loop();
   }
@@ -230,6 +273,66 @@ bool net_fetch_snapshot(Snapshot *out) {
   backoff_ms = 1000;
   next_retry_ms = 0;
   set_error("");
+  return true;
+}
+
+bool net_fetch_speak(const char *id, uint8_t *dst, size_t cap, size_t *out_n) {
+  if (out_n != nullptr) {
+    *out_n = 0;
+  }
+  if (id == nullptr || id[0] == '\0' || dst == nullptr || cap < 16) {
+    return false;
+  }
+  if (!status.wifi) {
+    return false;
+  }
+  char suffix[80];
+  snprintf(suffix, sizeof(suffix), "/api/cyd/speak/%s", id);
+  char url[192];
+  build_url(url, sizeof(url), suffix);
+
+  HTTPClient http;
+  WiFiClient client;
+  WiFiClientSecure secure;
+  if (cfg.use_tls) {
+    secure.setInsecure();
+    if (!http.begin(secure, url)) {
+      return false;
+    }
+  } else {
+    if (!http.begin(client, url)) {
+      return false;
+    }
+  }
+  http.setTimeout(10000);
+  http.addHeader("Accept", "application/octet-stream");
+  if (cfg.token[0] != '\0') {
+    char auth[96];
+    snprintf(auth, sizeof(auth), "Bearer %s", cfg.token);
+    http.addHeader("Authorization", auth);
+  }
+  int code = http.GET();
+  if (code != 200) {
+    http.end();
+    return false;
+  }
+  int len = http.getSize();
+  String payload = http.getString();
+  http.end();
+  size_t n = payload.length();
+  if (len > 0 && static_cast<size_t>(len) < n) {
+    n = static_cast<size_t>(len);
+  }
+  if (n == 0) {
+    return false;
+  }
+  if (n > cap) {
+    n = cap;
+  }
+  memcpy(dst, payload.c_str(), n);
+  if (out_n != nullptr) {
+    *out_n = n;
+  }
   return true;
 }
 

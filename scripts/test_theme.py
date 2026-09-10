@@ -16,6 +16,8 @@ class ThemeTests(unittest.TestCase):
         self.assertIn("dark_mode", store_h)
         self.assertIn('getBool("dark", true)', store_c)
         self.assertIn('putBool("dark"', store_c)
+        self.assertIn("volume", store_h)
+        self.assertIn('getUChar("vol"', store_c)
 
     def test_settings_has_dark_toggle_and_header_config_button(self) -> None:
         ui_h = (ROOT / "include" / "ui.h").read_text(encoding="utf-8")
@@ -27,7 +29,7 @@ class ThemeTests(unittest.TestCase):
         self.assertIn("CFG", ui_c)
         self.assertIn("ui_set_dark", main)
         self.assertIn("ui_header_hit", main)
-        self.assertIn("ui_render(&snap, page, online, hardware_wifi_rssi(), cfg.dark_mode)", main)
+        self.assertIn("ui_render(&snap, page, online, hardware_wifi_rssi(), cfg.dark_mode,", main)
 
 
 if __name__ == "__main__":

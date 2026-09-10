@@ -15,6 +15,7 @@ struct DeviceConfig {
   uint8_t poll_seconds;
   bool url_ok;
   bool dark_mode;
+  uint8_t volume;
 };
 
 void config_load(DeviceConfig *cfg);

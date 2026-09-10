@@ -34,6 +34,7 @@ void config_load(DeviceConfig *cfg) {
   cfg->port = 8088;
   cfg->poll_seconds = 5;
   cfg->dark_mode = true;
+  cfg->volume = 7;
   copy_trunc_local(cfg->aurago_url, sizeof(cfg->aurago_url), "demo");
 
   if (!prefs.begin("aurago-cyd", true)) {
@@ -47,12 +48,17 @@ void config_load(DeviceConfig *cfg) {
   String token = prefs.getString("token", "");
   uint8_t poll = prefs.getUChar("poll", 5);
   bool dark = prefs.getBool("dark", true);
+  uint8_t volume = prefs.getUChar("vol", 255);
+  if (volume > 10) {
+    volume = prefs.getBool("sound", true) ? 7 : 0;
+  }
   prefs.end();
 
   copy_field(cfg->aurago_url, sizeof(cfg->aurago_url), url);
   copy_field(cfg->token, sizeof(cfg->token), token);
   cfg->poll_seconds = poll < 2 ? 2 : poll;
   cfg->dark_mode = dark;
+  cfg->volume = volume;
   config_parse_url(cfg);
   cfg->demo = config_is_demo(cfg);
 
@@ -74,6 +80,7 @@ void config_save(const DeviceConfig *cfg) {
   prefs.putString("token", cfg->token);
   prefs.putUChar("poll", cfg->poll_seconds);
   prefs.putBool("dark", cfg->dark_mode);
+  prefs.putUChar("vol", cfg->volume > 10 ? 10 : cfg->volume);
   prefs.end();
 }
 

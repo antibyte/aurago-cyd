@@ -15,6 +15,7 @@ void net_begin(const DeviceConfig *cfg);
 void net_reconfigure(const DeviceConfig *cfg);
 void net_loop();
 bool net_fetch_snapshot(Snapshot *out);
+bool net_fetch_speak(const char *id, uint8_t *dst, size_t cap, size_t *out_n);
 bool net_send_heartbeat(int8_t rssi);
 bool net_send_ack(const char *id);
 void net_ws_pong();

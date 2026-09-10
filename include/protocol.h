@@ -47,6 +47,7 @@ struct DisplayInfo {
 
 struct NotifyInfo {
   bool active;
+  bool speak;
   char id[PROTO_ID_MAX + 1];
   char title[PROTO_TITLE_MAX + 1];
   char body[PROTO_BODY_MAX + 1];

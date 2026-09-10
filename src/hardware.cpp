@@ -1,4 +1,5 @@
 #include "hardware.h"
+#include "audio.h"
 
 #include <Arduino.h>
 #include <SPI.h>
@@ -33,6 +34,7 @@ void hardware_begin() {
   ledcSetup(0, 5000, 8);
   ledcAttachPin(CYD_BACKLIGHT_PIN, 0);
   hardware_set_brightness(200);
+  audio_begin();
 
   touchSpi.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
   ts.begin(touchSpi);

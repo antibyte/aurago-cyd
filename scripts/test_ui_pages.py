@@ -67,7 +67,7 @@ class UIPagesTests(unittest.TestCase):
         self.assertIn("mesh", self.proto)
 
     def test_firmware_version_bumped(self) -> None:
-        self.assertIn('-DFIRMWARE_VERSION=\\"0.3.1\\"', self.ini)
+        self.assertIn('-DFIRMWARE_VERSION=\\"0.3.13\\"', self.ini)
 
 
 if __name__ == "__main__":

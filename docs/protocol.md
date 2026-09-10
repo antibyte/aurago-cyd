@@ -79,12 +79,14 @@ Server → device:
 
 ```json
 { "type": "snapshot", "data": { } }
-{ "type": "notify", "id": "ntf_01HEXAMPLE", "title": "Backup failed", "body": "…", "priority": "critical", "ttl_s": 60 }
+{ "type": "notify", "id": "ntf_01HEXAMPLE", "title": "Backup failed", "body": "…", "priority": "critical", "ttl_s": 60, "speak": true }
 { "type": "clear", "id": "ntf_01HEXAMPLE" }
 { "type": "led", "color": "yellow" }
 { "type": "page", "page": "load" }   // status | home | load | work | host
 { "type": "ping" }
 ```
+
+`speak: true` means the hub rendered English audio with sanoTTS. The glass then `GET /api/cyd/speak/{id}` (same Bearer token) for unsigned 8-bit mono PCM at 8 kHz (`X-Sample-Rate: 8000`). Missing clip → 404; retry a few times.
 
 Device → server: `{"type":"pong"}`, `{"type":"ack","id":"…","action":"dismiss"}`, `{"type":"heartbeat",…}`.
 

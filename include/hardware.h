@@ -14,6 +14,7 @@
 #define CYD_LDR_PIN 34
 #define CYD_BOOT_PIN 0
 #define CYD_BACKLIGHT_PIN 21
+#define CYD_SPEAKER_PIN 26
 
 #define XPT2046_IRQ 36
 #define XPT2046_MOSI 32

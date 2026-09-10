@@ -49,6 +49,7 @@ static void parse_notify(JsonVariantConst n, NotifyInfo *out) {
     ttl = 300;
   }
   out->ttl_s = static_cast<uint16_t>(ttl);
+  out->speak = obj["speak"] | false;
 }
 
 static void parse_feed_items(JsonVariantConst arr, FeedItem *items, uint8_t *n, uint8_t cap) {

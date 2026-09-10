@@ -69,6 +69,12 @@ class ProtocolTests(unittest.TestCase):
         self.assertIn("cpu_pct", payload["host"])
         self.assertIn("busy", payload["agent"])
 
+    def test_firmware_parses_speak_flag(self) -> None:
+        proto = (ROOT / "src" / "protocol.cpp").read_text(encoding="utf-8")
+        hdr = (ROOT / "include" / "protocol.h").read_text(encoding="utf-8")
+        self.assertIn("bool speak", hdr)
+        self.assertIn('obj["speak"]', proto)
+
     def test_heartbeat_and_notify_and_ack(self) -> None:
         status, _ = self.request(
             "POST",

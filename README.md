@@ -5,18 +5,20 @@ Firmware for the [ESP32 Cheap Yellow Display](https://github.com/witnessmenow/ES
 [AuraGo](https://github.com/antibyte/AuraGo): agent idle/busy, host load, missions,
 and agent-pushed notification overlays.
 
-```
-┌────────────────────────────────┐
-│ 21:04  Home     3  2  CFG  ▮▮▮ │
-│  21:04              Idle       │
-│  grok-4     waiting            │
-│  LAST 12m     MISSIONS 0 run   │
-│  CPU  ▁▂▃▅▄▆▅▃   42%           │
-│           ● ○ ○ ○ ○            │
-└────────────────────────────────┘
-```
+![AuraGo display UI in dark and light mode](docs/ui-preview.png)
 
-Five pages: **Home**, **Load**, **Work**, **Alerts** (system warnings + count bubble), **Mesh** (MeshCore inbox). After 10s without touch the pages rotate every 5s. Incoming notify/mesh/warnings jump immediately. Tap footer dots, badges, or swipe. Dark mode is the default.
+Graphite surfaces, mint accents, bold status and numbers, and custom pixel-aligned
+icons. The orbit backdrop is drawn natively; no image assets or extra graphics
+dependencies are needed. Each navigation tab has a 64×36-pixel touch target.
+Dashboard updates compose 16-bit RGB565 bands in a 25,600-byte pixel buffer before
+sending them to the TFT, including notification overlays. Allocation failure falls
+back to direct drawing.
+
+Five pages: **Home**, **Load**, **Work**, **Alerts** (system warnings + count bubble), **Mesh** (MeshCore inbox). After 10s without touch the pages rotate every 5s. Incoming notify/mesh/warnings jump immediately. Tap labeled footer tabs, badges, or swipe. Dark mode is the default.
+
+The image above is a host-rendered preview of the actual UI code with example
+data and the firmware fonts. Arc edges approximate TFT anti-aliasing; hardware
+color, refresh timing, and touch calibration still require a physical display.
 
 ## Hardware
 
@@ -59,10 +61,10 @@ If upload fails, keep `upload_speed = 115200` (already set) and hold **BOOT** wh
    from AuraGo (`https://<lan-ip>:8443` if HTTPS is on) and type the 9-character
    code (`XXX XXX XXX`) on the glass. `aura_` is prefilled. If the host is wrong,
    tap **Edit** on the connecting/offline screen.
-4. After connect, swipe (or tap the footer dots) across HOME, LOAD, WORK, and HOST.
-6. Tap **CFG** in the header for setup (HTTPS, port, dark mode). Dark mode is the default.
-7. Tap an overlay to dismiss it. RGB LED: green idle, yellow busy, red error/critical, blue connecting.
-8. Hold **BOOT** for 5 seconds at power-on to wipe config and reopen the portal.
+4. After connect, swipe (or tap the footer tabs) across Home, Load, Work, Alerts, and Mesh.
+5. Tap **CFG** in the header for setup (HTTPS, port, dark mode). Dark mode is the default.
+6. Tap an overlay to dismiss it. RGB LED: green idle, yellow busy, red error/critical, blue connecting.
+7. Hold **BOOT** for 5 seconds at power-on to wipe config and reopen the portal.
 
 `demo` as the URL runs an offline animated dashboard (no AuraGo required).
 
@@ -98,6 +100,13 @@ curl -H "Authorization: Bearer aura_dev" -H "Content-Type: application/json" ^
 ```
 
 ## Layout
+
+To check UI layouts without a board, build `cyd` once to fetch the pinned display
+libraries, then run `python scripts/preview_ui.py` (C++17 compiler and Pillow).
+On Windows it uses Visual Studio C++ Build Tools; on Linux/macOS it uses `c++`.
+The script compiles `src/ui.cpp`, checks text bounds and touch targets, compares
+buffered and direct output, and writes PNG previews to `.pio/ui-preview/`.
+Run the existing regression tests with `python -m unittest discover -s scripts`.
 
 ```
 include/     public headers

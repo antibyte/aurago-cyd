@@ -5,6 +5,7 @@
 #include <strings.h>
 #include <time.h>
 
+#include "audio.h"
 #include "config_store.h"
 #include "hardware.h"
 #include "net_client.h"
@@ -31,6 +32,9 @@ static bool have_forced_led = false;
 static bool settings_open = false;
 static DeviceConfig edit_cfg;
 static char settings_status[48];
+static char speak_id[PROTO_ID_MAX + 1];
+static uint32_t speak_at = 0;
+static uint8_t speak_pcm[24000];
 
 static LedColor led_from_name(const char *name) {
   if (name == nullptr) {
@@ -120,18 +124,45 @@ static void note_touch() {
   carousel_on = false;
 }
 
-static void open_overlay(const NotifyInfo *n) {
+static bool open_overlay(const NotifyInfo *n) {
   if (n == nullptr || !n->active) {
-    return;
+    return false;
   }
   if (!overlay_replace_ok(n)) {
-    return;
+    return false;
   }
+  bool repeat = overlay_open && n->id[0] != '\0' && strcmp(snap.notify.id, n->id) == 0;
   snap.notify = *n;
   snap.notify.active = true;
   overlay_open = true;
   overlay_until = millis() + static_cast<uint32_t>(notify_ttl(n)) * 1000UL;
   note_touch();
+  if (repeat) {
+    return false;
+  }
+  if (strncasecmp(n->title, "Mesh", 4) == 0) {
+    audio_play(AudioCue::Mesh);
+  } else if (notify_rank(n->priority) >= 3) {
+    audio_play(AudioCue::NotifyHigh);
+  } else {
+    audio_play(AudioCue::Notify);
+  }
+  if (n->speak && n->id[0] != '\0') {
+    copy_trunc(speak_id, sizeof(speak_id), n->id);
+    speak_at = millis() + 600;
+  }
+  return true;
+}
+
+static void play_feed_sounds(int prev_alerts, int prev_unread, bool chimed) {
+  if (chimed || prev_alerts < 0) {
+    return;
+  }
+  if (snap.alerts.count > prev_alerts) {
+    audio_play(AudioCue::Alert);
+  } else if (snap.mesh.unread > prev_unread) {
+    audio_play(AudioCue::Mesh);
+  }
 }
 
 static void close_overlay(bool ack) {
@@ -152,11 +183,9 @@ static void redraw() {
   } else if (!online) {
     ui_offline(&cfg, &st, last_ok);
   } else {
-    ui_render(&snap, page, online, hardware_wifi_rssi(), cfg.dark_mode);
-    if (overlay_open && snap.notify.active) {
-      uint32_t remain = overlay_until > millis() ? overlay_until - millis() : 0;
-      ui_overlay(&snap.notify, remain);
-    }
+    uint32_t remain = overlay_until > millis() ? overlay_until - millis() : 0;
+    ui_render(&snap, page, online, hardware_wifi_rssi(), cfg.dark_mode,
+              overlay_open && snap.notify.active ? &snap.notify : nullptr, remain);
   }
   apply_led();
   last_draw = millis();
@@ -167,18 +196,30 @@ static void apply_ws_events() {
   bool dirty = false;
   while (net_take_event(&ev)) {
     switch (ev.type) {
-      case WsType::Snapshot:
+      case WsType::Snapshot: {
         // Refresh metrics only. Page jumps come from WsType::Page / Notify,
         // otherwise a stuck hub display.page (alerts/mesh) steals the glass.
+        int prev_alerts = have_snap ? snap.alerts.count : -1;
+        int prev_unread = have_snap ? snap.mesh.unread : -1;
+        NotifyInfo keep{};
+        bool keep_overlay = overlay_open && snap.notify.active;
+        if (keep_overlay) {
+          keep = snap.notify;
+        }
         snap = ev.snapshot;
         have_snap = true;
         last_ok = millis();
         ui_note_metrics(snap.host.cpu_pct, snap.host.mem_pct, snap.host.disk_pct);
+        bool chimed = false;
         if (snap.notify.active) {
-          open_overlay(&snap.notify);
+          chimed = open_overlay(&snap.notify);
+        } else if (keep_overlay) {
+          snap.notify = keep;
         }
+        play_feed_sounds(prev_alerts, prev_unread, chimed);
         dirty = true;
         break;
+      }
       case WsType::Notify:
         open_overlay(&ev.notify);
         if (!settings_open && strncasecmp(ev.notify.title, "Mesh", 4) == 0) {
@@ -230,13 +271,16 @@ void setup() {
 
   config_load(&cfg);
   ui_set_dark(cfg.dark_mode);
+  audio_set_volume(cfg.volume);
 
   bool force_portal = hardware_boot_held(5000);
+  Serial.printf("wifi: boot_portal=%d\n", force_portal ? 1 : 0);
   if (force_portal) {
     ui_splash("config reset", "join agocyd-XXXX");
     config_clear();
     config_load(&cfg);
     ui_set_dark(cfg.dark_mode);
+    audio_set_volume(cfg.volume);
   } else {
     ui_splash("connecting Wi-Fi", "hold BOOT 5s to reset");
   }
@@ -310,6 +354,7 @@ static void settings_save() {
   config_save(&edit_cfg);
   cfg = edit_cfg;
   ui_set_dark(cfg.dark_mode);
+  audio_set_volume(cfg.volume);
   net_reconfigure(&cfg);
   have_snap = false;
   settings_open = false;
@@ -319,14 +364,37 @@ static void settings_save() {
 }
 
 void loop() {
+  static bool ui_wifi = true;
   net_loop();
   apply_ws_events();
+  audio_loop();
+  if (speak_id[0] != '\0' && !settings_open && !audio_busy() && millis() >= speak_at) {
+    size_t n = 0;
+    bool got = false;
+    for (int i = 0; i < 16 && !got; i++) {
+      if (net_fetch_speak(speak_id, speak_pcm, sizeof(speak_pcm), &n) && n > 16) {
+        audio_play_pcm_u8(speak_pcm, static_cast<uint16_t>(n), 8000);
+        got = true;
+      } else {
+        delay(250);
+      }
+    }
+    speak_id[0] = '\0';
+  }
+  bool wifi_now = WiFi.status() == WL_CONNECTED;
+  if (wifi_now != ui_wifi && !settings_open) {
+    redraw();
+  }
+  ui_wifi = wifi_now;
 
   TouchEvent touch = hardware_poll_touch();
   if (settings_open) {
     if (touch.tap) {
       note_touch();
       char hit = ui_settings_hit(touch.x, touch.y);
+      if (hit != 0 && hit != 'q' && hit != 'u' && hit != 'm') {
+        audio_play(AudioCue::Click);
+      }
       if (hit == 'h') {
         edit_cfg.use_tls = !edit_cfg.use_tls;
         if (edit_cfg.use_tls && (edit_cfg.port == 80 || edit_cfg.port == 8088)) {
@@ -341,6 +409,34 @@ void loop() {
         ui_set_dark(edit_cfg.dark_mode);
         settings_status[0] = '\0';
         ui_settings(&edit_cfg, settings_status);
+      } else if (hit == 'q') {
+        if (edit_cfg.volume > 0) {
+          edit_cfg.volume--;
+        }
+        audio_set_volume(edit_cfg.volume);
+        audio_play(AudioCue::Click);
+        settings_status[0] = '\0';
+        ui_settings(&edit_cfg, settings_status);
+      } else if (hit == 'u') {
+        if (edit_cfg.volume < AUDIO_VOL_MAX) {
+          edit_cfg.volume++;
+        }
+        audio_set_volume(edit_cfg.volume);
+        audio_play(AudioCue::Click);
+        settings_status[0] = '\0';
+        ui_settings(&edit_cfg, settings_status);
+      } else if (hit == 'm') {
+        static uint8_t vol_restore = 7;
+        if (edit_cfg.volume == 0) {
+          edit_cfg.volume = vol_restore == 0 ? 7 : vol_restore;
+        } else {
+          vol_restore = edit_cfg.volume;
+          edit_cfg.volume = 0;
+        }
+        audio_set_volume(edit_cfg.volume);
+        audio_play(AudioCue::Click);
+        settings_status[0] = '\0';
+        ui_settings(&edit_cfg, settings_status);
       } else if (hit == '-' && edit_cfg.port > 1) {
         edit_cfg.port--;
         ui_settings(&edit_cfg, settings_status);
@@ -353,6 +449,7 @@ void loop() {
         settings_save();
       } else if (hit == 'b') {
         ui_set_dark(cfg.dark_mode);
+        audio_set_volume(cfg.volume);
         net_reconfigure(&cfg);
         settings_open = false;
         note_touch();
@@ -376,6 +473,7 @@ void loop() {
 
   if (touch.tap) {
     if (overlay_open) {
+      audio_play(AudioCue::Click);
       close_overlay(true);
       redraw();
     } else {
@@ -383,33 +481,42 @@ void loop() {
       bool online = cfg.demo || now.online;
       char head = ui_header_hit(touch.x, touch.y);
       if (head == 'c') {
+        audio_play(AudioCue::Click);
         open_settings();
       } else if (head == 'a' && have_snap && online) {
+        audio_play(AudioCue::Click);
         page = 3;
         redraw();
       } else if (head == 'm' && have_snap && online) {
+        audio_play(AudioCue::Click);
         page = 4;
         redraw();
       } else if ((!have_snap || !online) && ui_offline_hit(touch.x, touch.y) == 'e') {
+        audio_play(AudioCue::Click);
         open_settings();
       } else if (have_snap && online) {
         char hit = ui_page_hit(touch.x, touch.y);
         if (hit == '<') {
+          audio_play(AudioCue::Click);
           cycle_page(-1);
           redraw();
         } else if (hit == '>') {
+          audio_play(AudioCue::Click);
           cycle_page(1);
           redraw();
         } else if (hit >= '0' && hit < '0' + UI_PAGE_COUNT) {
+          audio_play(AudioCue::Click);
           page = static_cast<uint8_t>(hit - '0');
           redraw();
         }
       }
     }
   } else if (touch.swipe_left) {
+    audio_play(AudioCue::Swipe);
     cycle_page(1);
     redraw();
   } else if (touch.swipe_right) {
+    audio_play(AudioCue::Swipe);
     cycle_page(-1);
     redraw();
   }
@@ -451,15 +558,26 @@ void loop() {
     last_poll = millis();
     Snapshot next;
     if (net_fetch_snapshot(&next)) {
+      int prev_alerts = have_snap ? snap.alerts.count : -1;
+      int prev_unread = have_snap ? snap.mesh.unread : -1;
+      NotifyInfo keep{};
+      bool keep_overlay = overlay_open && snap.notify.active;
+      if (keep_overlay) {
+        keep = snap.notify;
+      }
       snap = next;
       have_snap = true;
       last_ok = millis();
       ui_note_metrics(next.host.cpu_pct, next.host.mem_pct, next.host.disk_pct);
+      bool chimed = false;
       if (next.notify.active) {
-        open_overlay(&next.notify);
-      } else if (!overlay_open) {
+        chimed = open_overlay(&next.notify);
+      } else if (keep_overlay) {
+        snap.notify = keep;
+      } else {
         snap.notify.active = false;
       }
+      play_feed_sounds(prev_alerts, prev_unread, chimed);
       redraw();
     } else if (have_snap && millis() - last_ok > 15000) {
       redraw();
