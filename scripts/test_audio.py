@@ -45,6 +45,7 @@ class AudioTests(unittest.TestCase):
         self.assertIn("audio_play(AudioCue::Mesh)", self.main)
         self.assertIn("audio_play_pcm_u8", self.audio_h)
         self.assertIn("net_fetch_speak", self.main)
+        self.assertIn("speak miss", self.main)
 
     def test_volume_persisted_and_settings_stepper(self) -> None:
         self.assertIn("uint8_t volume", self.store_h)

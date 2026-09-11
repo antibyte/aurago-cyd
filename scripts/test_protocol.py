@@ -74,6 +74,7 @@ class ProtocolTests(unittest.TestCase):
         hdr = (ROOT / "include" / "protocol.h").read_text(encoding="utf-8")
         self.assertIn("bool speak", hdr)
         self.assertIn('obj["speak"]', proto)
+        self.assertIn("#define PROTO_ID_MAX 47", hdr)
 
     def test_heartbeat_and_notify_and_ack(self) -> None:
         status, _ = self.request(

@@ -8,7 +8,7 @@
 #define PROTO_BODY_MAX 96
 #define PROTO_TASK_MAX 40
 #define PROTO_MODEL_MAX 23
-#define PROTO_ID_MAX 39
+#define PROTO_ID_MAX 47
 #define PROTO_LED_MAX 7
 #define PROTO_PAGE_MAX 11
 #define PROTO_PRIO_MAX 11

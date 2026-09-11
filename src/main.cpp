@@ -379,6 +379,9 @@ void loop() {
         delay(250);
       }
     }
+    if (!got) {
+      Serial.printf("speak miss %s\n", speak_id);
+    }
     speak_id[0] = '\0';
   }
   bool wifi_now = WiFi.status() == WL_CONNECTED;
