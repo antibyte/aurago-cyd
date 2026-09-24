@@ -373,6 +373,7 @@ void loop() {
     bool got = false;
     for (int i = 0; i < 16 && !got; i++) {
       if (net_fetch_speak(speak_id, speak_pcm, sizeof(speak_pcm), &n) && n > 16) {
+        Serial.printf("speak %u bytes\n", static_cast<unsigned>(n));
         audio_play_pcm_u8(speak_pcm, static_cast<uint16_t>(n), 8000);
         got = true;
       } else {

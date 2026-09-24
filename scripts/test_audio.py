@@ -46,6 +46,11 @@ class AudioTests(unittest.TestCase):
         self.assertIn("audio_play_pcm_u8", self.audio_h)
         self.assertIn("net_fetch_speak", self.main)
         self.assertIn("speak miss", self.main)
+        self.assertIn("ledcSetup(SPEAKER_CH, 64000, 8)", self.audio_c)
+        self.assertNotIn("v *= 3", self.audio_c)
+        self.assertIn("2 * AUDIO_VOL_MAX - level", self.audio_c)
+        self.assertIn("pcm_wait(&next, 62)", self.audio_c)
+        self.assertIn("readBytes", (ROOT / "src" / "net_client.cpp").read_text(encoding="utf-8"))
 
     def test_volume_persisted_and_settings_stepper(self) -> None:
         self.assertIn("uint8_t volume", self.store_h)

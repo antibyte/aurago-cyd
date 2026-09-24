@@ -31,17 +31,28 @@ static uint16_t pcm_n = 0;
 static uint8_t pcm_buf[24000];
 static TaskHandle_t pcm_task_h = nullptr;
 
-static uint8_t scale_pcm(uint8_t sample) {
+static uint32_t scale_pcm(uint8_t sample) {
   int v = static_cast<int>(sample) - 128;
-  v = v * static_cast<int>(volume) / AUDIO_VOL_MAX;
-  int duty = 128 + v;
+  // Keep the default speech level loud while preserving useful low-volume steps.
+  int level = static_cast<int>(volume);
+  int pct = 100 * level * (2 * AUDIO_VOL_MAX - level) /
+            (AUDIO_VOL_MAX * AUDIO_VOL_MAX);
+  int duty = 128 + v * pct / 100;
   if (duty < 0) {
     duty = 0;
   }
   if (duty > 255) {
     duty = 255;
   }
-  return static_cast<uint8_t>(duty);
+  return static_cast<uint32_t>(duty);
+}
+
+static void pcm_wait(uint32_t *next, uint32_t us) {
+  *next += us;
+  int32_t wait = static_cast<int32_t>(*next - micros());
+  if (wait > 2) {
+    delayMicroseconds(static_cast<uint32_t>(wait));
+  }
 }
 
 static void pcm_task(void *arg) {
@@ -50,13 +61,16 @@ static void pcm_task(void *arg) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     uint32_t next = micros();
     while (pcm_run && pcm_i < pcm_n) {
-      ledcWrite(SPEAKER_CH, scale_pcm(pcm_buf[pcm_i]));
-      pcm_i = static_cast<uint16_t>(pcm_i + 1);
-      next += 125;
-      int32_t wait = static_cast<int32_t>(next - micros());
-      if (wait > 2) {
-        delayMicroseconds(static_cast<uint32_t>(wait));
+      uint8_t a = pcm_buf[pcm_i];
+      uint8_t b = a;
+      if (static_cast<uint16_t>(pcm_i + 1) < pcm_n) {
+        b = pcm_buf[pcm_i + 1];
       }
+      ledcWrite(SPEAKER_CH, scale_pcm(a));
+      pcm_wait(&next, 62);
+      ledcWrite(SPEAKER_CH, scale_pcm(static_cast<uint8_t>((static_cast<uint16_t>(a) + b) / 2)));
+      pcm_wait(&next, 63);
+      pcm_i = static_cast<uint16_t>(pcm_i + 1);
     }
     pcm_run = false;
   }
@@ -163,10 +177,10 @@ void audio_play_pcm_u8(const uint8_t *samples, uint16_t n, uint16_t rate) {
   memcpy(pcm_buf, samples, n);
   pcm_n = n;
   pcm_i = 0;
-  speaker_off();
-  ledcSetup(SPEAKER_CH, 32000, 8);
+  ledcSetup(SPEAKER_CH, 64000, 8);
   ledcAttachPin(CYD_SPEAKER_PIN, SPEAKER_CH);
   pin_attached = true;
+  ledcWrite(SPEAKER_CH, 128);
   if (pcm_task_h == nullptr) {
     xTaskCreatePinnedToCore(pcm_task, "pcm", 2048, nullptr, 5, &pcm_task_h, 1);
   }

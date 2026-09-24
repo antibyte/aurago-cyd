@@ -313,19 +313,19 @@ bool net_fetch_speak(const char *id, uint8_t *dst, size_t cap, size_t *out_n) {
     return false;
   }
   int len = http.getSize();
-  String payload = http.getString();
-  http.end();
-  size_t n = payload.length();
-  if (len > 0 && static_cast<size_t>(len) < n) {
-    n = static_cast<size_t>(len);
-  }
-  if (n == 0) {
+  if (len <= 0) {
+    http.end();
     return false;
   }
-  if (n > cap) {
-    n = cap;
+  size_t want = cap;
+  if (static_cast<size_t>(len) < want) {
+    want = static_cast<size_t>(len);
   }
-  memcpy(dst, payload.c_str(), n);
+  size_t n = http.getStream().readBytes(dst, want);
+  http.end();
+  if (n != want) {
+    return false;
+  }
   if (out_n != nullptr) {
     *out_n = n;
   }
