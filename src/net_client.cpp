@@ -48,15 +48,11 @@ static void push_event(const WsEvent &ev) {
   event_count++;
 }
 
-static void build_path(char *out, size_t cap, const char *suffix, bool with_token) {
+static void build_path(char *out, size_t cap, const char *suffix) {
   if (cfg.path_prefix[0] != '\0') {
     snprintf(out, cap, "%s%s", cfg.path_prefix, suffix);
   } else {
     snprintf(out, cap, "%s", suffix);
-  }
-  if (with_token && cfg.token[0] != '\0') {
-    size_t n = strlen(out);
-    snprintf(out + n, cap - n, "%stoken=%s", strchr(out, '?') ? "&" : "?", cfg.token);
   }
 }
 
@@ -155,7 +151,7 @@ static void ws_start() {
     return;
   }
   char path[160];
-  build_path(path, sizeof(path), "/api/cyd/ws", true);
+  build_path(path, sizeof(path), "/api/cyd/ws");
   if (cfg.token[0] != '\0') {
     snprintf(ws_headers, sizeof(ws_headers), "Authorization: Bearer %s", cfg.token);
     ws.setExtraHeaders(ws_headers);
